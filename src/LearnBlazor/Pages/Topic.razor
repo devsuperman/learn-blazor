@@ -50,11 +50,11 @@ else
             case "predict":
                 <PredictTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
                 break;
-            case "practice":
-                <PracticeTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
-                break;
             case "quiz":
                 <QuizTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
+                break;
+            case "practice":
+                <PracticeTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
                 break;
             case "interview":
                 <InterviewTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
@@ -75,8 +75,8 @@ else
     [
         ("theory", "1 · Theory"),
         ("predict", "2 · Predict"),
-        ("practice", "3 · Practice"),
-        ("quiz", "4 · Quiz"),
+        ("quiz", "3 · Quiz"),
+        ("practice", "4 · Practice"),
         ("interview", "Interview"),
     ];
 
