@@ -1,0 +1,70 @@
+@implements IDisposable
+@inject ContentService Content
+@inject ProgressService Progress
+
+<nav class="nav" aria-label="Topics">
+    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+        <span class="nav-num">⌂</span><span class="nav-title">Overview</span>
+    </NavLink>
+
+    <div class="nav-heading">Levels</div>
+
+    @if (_topics is null)
+    {
+        <p class="nav-muted">Loading…</p>
+    }
+    else
+    {
+        @foreach (var topic in _topics)
+        {
+            if (topic.Available)
+            {
+                <NavLink class="nav-link" href="@($"topic/{topic.Id}")">
+                    <span class="nav-num">@topic.Number</span>
+                    <span class="nav-title">@topic.Title</span>
+                    <StatusBadge Status="@StatusOf(topic.Id)" />
+                </NavLink>
+            }
+            else
+            {
+                <div class="nav-link nav-locked" title="Coming soon">
+                    <span class="nav-num">@topic.Number</span>
+                    <span class="nav-title">@topic.Title</span>
+                    <span class="badge badge-soon">soon</span>
+                </div>
+            }
+        }
+    }
+</nav>
+
+@code {
+    private IReadOnlyList<TopicSummary>? _topics;
+    private readonly Dictionary<string, TopicStatus> _status = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        Progress.Changed += OnProgressChanged;
+        _topics = await Content.GetTopicsAsync();
+        await LoadStatusAsync();
+    }
+
+    private TopicStatus StatusOf(string id) =>
+        _status.TryGetValue(id, out var s) ? s : TopicStatus.NotStarted;
+
+    private async Task LoadStatusAsync()
+    {
+        foreach (var topic in _topics ?? [])
+        {
+            if (topic.Available)
+                _status[topic.Id] = (await Progress.GetAsync(topic.Id)).Status;
+        }
+    }
+
+    private void OnProgressChanged() => _ = InvokeAsync(async () =>
+    {
+        await LoadStatusAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Progress.Changed -= OnProgressChanged;
+}

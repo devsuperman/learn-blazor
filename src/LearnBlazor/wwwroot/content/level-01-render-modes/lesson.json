@@ -1,0 +1,160 @@
+{
+  "id": "level-01-render-modes",
+  "number": 1,
+  "title": "Render modes",
+  "summary": "Where a component runs (server or browser) and whether it is interactive.",
+  "predict": [
+    {
+      "id": "A",
+      "title": "No render mode",
+      "body": "In a Blazor Web App, this page has **no** `@rendermode`. You open `/a` and click the button 3 times.\n\n```razor\n@page \"/a\"\n\n<p>Count: @count</p>\n<button @onclick=\"() => count++\">+1</button>\n\n@code {\n    private int count;\n}\n```\n\n**What does the page show after 3 clicks?**",
+      "answer": "**Count: 0.** Nothing happens. Without `@rendermode`, the page is **static SSR**: the server sends HTML and disposes the component. The `@onclick` handler is never wired up, because no C# is listening in the browser or on the server. There is no error, which is why this bug is easy to miss."
+    },
+    {
+      "id": "B",
+      "title": "Interactive Server",
+      "body": "Same page, one line added. You click the button 3 times.\n\n```razor\n@page \"/b\"\n@rendermode InteractiveServer\n\n<p>Count: @count</p>\n<button @onclick=\"() => count++\">+1</button>\n\n@code {\n    private int count;\n}\n```\n\n**What does the page show, and what travels over the network on each click?**",
+      "answer": "**Count: 3.** Each click is sent to the server over the SignalR **WebSocket**. The server runs `count++`, re-renders, and sends back only the **diff** (the changed text). You don't need `StateHasChanged()`: Blazor re-renders automatically after an event handler."
+    },
+    {
+      "id": "C",
+      "title": "How many times?",
+      "body": "```razor\n@page \"/c\"\n@rendermode InteractiveServer\n\n<p>Hello</p>\n\n@code {\n    protected override void OnInitialized()\n    {\n        Console.WriteLine(\"C initialized\");\n    }\n}\n```\n\n**You load `/c` once (a full page load). How many times does \"C initialized\" print, and where?**",
+      "answer": "**Twice, both in the server console** (the terminal where `dotnet run` runs). The first time is during **prerendering** (static HTML). The second is when the circuit starts and the component becomes interactive. With `prerender: false`, it prints only once."
+    },
+    {
+      "id": "D",
+      "title": "WebAssembly console",
+      "body": "Same as C, but the component is in the `.Client` project and uses:\n\n```razor\n@rendermode InteractiveWebAssembly\n```\n\n**After one full page load, where does \"C initialized\" appear?**",
+      "answer": "**Once in the server console** (prerendering happens on the server) and **once in the browser's dev tools console** (the WebAssembly render runs in the browser, so `Console.WriteLine` goes there)."
+    }
+  ],
+  "practice": [
+    {
+      "id": "p1",
+      "text": "**Create the app** in your own folder (for example `learn-blazor/level-01-render-modes/code`):\n\n```bash\ndotnet new blazor -n RenderModesLab -int Auto\n```\n\nYou get two projects: `RenderModesLab` (server) and `RenderModesLab.Client` (the code sent to the browser).",
+      "hint": "If the options are different in your SDK, run `dotnet new blazor --help`. `-int Auto` enables both Server and WebAssembly, so you can try all four modes."
+    },
+    {
+      "id": "p2",
+      "text": "**Create `/static`** in the server project: a counter button and a line showing `RendererInfo.Name` and `RendererInfo.IsInteractive`. Use **no** `@rendermode`.",
+      "hint": "`<p>@RendererInfo.Name / @RendererInfo.IsInteractive</p>` works in any component."
+    },
+    {
+      "id": "p3",
+      "text": "**Create `/server`**: the same page with `@rendermode InteractiveServer`, in the server project."
+    },
+    {
+      "id": "p4",
+      "text": "**Create `/wasm`** with `@rendermode InteractiveWebAssembly`, and **`/auto`** with `@rendermode InteractiveAuto`. Both go in the **`.Client`** project.",
+      "hint": "If the page returns 404, check that the file is in the `.Client` project and that `Program.cs` calls `.AddAdditionalAssemblies(...)` with the client assembly (the template already does this)."
+    },
+    {
+      "id": "p5",
+      "text": "**Run the app** (`dotnet run` in the server project). Visit all four pages and write down whether the count changes, and what `Name` and `IsInteractive` show. Put this in the Note tab's free notes."
+    },
+    {
+      "id": "p6",
+      "text": "**Dev tools:** on `/server`, find the WebSocket in the Network tab (filter: WS). On `/wasm`, find the `.wasm` downloads. On `/static`, use View Source and check that the full HTML is there."
+    },
+    {
+      "id": "p7",
+      "text": "On `/server`, add `Console.WriteLine` in `OnInitialized`. Reload once and **count the lines** in the terminal."
+    },
+    {
+      "id": "p8",
+      "text": "Disable prerendering with `@rendermode @(new InteractiveServerRenderMode(prerender: false))`. Reload and **count again**. Also look at View Source: what changed?",
+      "hint": "Without prerendering, the server sends almost no HTML for the component, and it appears only when the circuit is ready."
+    }
+  ],
+  "challenge": {
+    "minutes": 15,
+    "statement": "In a **new** Blazor Web App, build from scratch a `/modes` page using **Interactive Server** that shows:\n\n- the render mode name and whether it is interactive\n- a click counter\n- the time of the last click\n\nRun it with `dotnet run` and check that it works before you finish. Then answer the three questions below.",
+    "questions": [
+      {
+        "id": "q1",
+        "text": "Why does the button work on /server but not on /static?",
+        "modelAnswer": "A static page is **only HTML**: the server renders it and disposes the component, so **no circuit** and no C# are listening for the click. On `/server`, a SignalR circuit keeps the component alive on the server and receives events."
+      },
+      {
+        "id": "q2",
+        "text": "On /wasm, where does the C# code run, and what does the browser download first?",
+        "modelAnswer": "**In the browser**, on .NET compiled to WebAssembly. First the browser downloads the **.NET runtime and the app's assemblies** (the `_framework/*.wasm` and `.dll` files)."
+      },
+      {
+        "id": "q3",
+        "text": "Why did the console line print twice before you disabled prerendering?",
+        "modelAnswer": "Because of **prerendering**: the component is rendered once on the server as static HTML, and then **again** when it becomes interactive, so `OnInitialized` runs both times."
+      }
+    ],
+    "rubric": [
+      {
+        "id": "r1",
+        "criterion": "Render mode",
+        "passLooksLike": "`@rendermode InteractiveServer` is on the `/modes` page"
+      },
+      {
+        "id": "r2",
+        "criterion": "Mode info",
+        "passLooksLike": "The page shows `RendererInfo.Name` and `RendererInfo.IsInteractive`"
+      },
+      {
+        "id": "r3",
+        "criterion": "Counter",
+        "passLooksLike": "`@onclick` increments the count, with no needless `StateHasChanged()`"
+      },
+      {
+        "id": "r4",
+        "criterion": "Last click time",
+        "passLooksLike": "A field stores the time and the page displays it"
+      },
+      {
+        "id": "r5",
+        "criterion": "Written answers",
+        "passLooksLike": "Q1: static = HTML only, no circuit. Q2: runs in the browser after runtime + assemblies download. Q3: prerender on the server, then again when interactive"
+      }
+    ]
+  },
+  "interview": [
+    {
+      "id": "i1",
+      "question": "What are the Blazor render modes?",
+      "modelAnswer": "Static SSR (the default: HTML only, not interactive), Interactive Server (runs on the server over a SignalR circuit), Interactive WebAssembly (runs in the browser), and Interactive Auto (Server first, then WebAssembly once it is downloaded)."
+    },
+    {
+      "id": "i2",
+      "question": "When would you choose Server over WebAssembly?",
+      "modelAnswer": "When you want a fast first load, direct access to server resources (database, secrets), or small client devices, and users have a stable, low-latency connection. Typical for internal business apps."
+    },
+    {
+      "id": "i3",
+      "question": "When would you choose WebAssembly over Server?",
+      "modelAnswer": "When you want no round trip per UI event, offline support, less server memory and connection load, or hosting as static files (a CDN). The trade-off is a larger first download, and that all client code is public."
+    },
+    {
+      "id": "i4",
+      "question": "What does Auto mode do?",
+      "modelAnswer": "It starts with Interactive Server for a fast first render while downloading the WebAssembly bundle in the background. Later visits use WebAssembly. The component must live in the `.Client` project and work in both places."
+    },
+    {
+      "id": "i5",
+      "question": "What is prerendering and what problem can it cause?",
+      "modelAnswer": "The server renders interactive components to HTML first, for a fast first paint and SEO, then renders them again when they become interactive. Lifecycle methods run twice, so data can load twice or flicker. Fix it with `prerender: false` or by persisting state with `[PersistentState]` (.NET 10)."
+    },
+    {
+      "id": "i6",
+      "question": "How does the UI update in Interactive Server?",
+      "modelAnswer": "The browser sends the event over a SignalR WebSocket. The server runs the handler, re-renders the component, compares it with the previous render tree, and sends only the diff. The browser then patches the DOM."
+    },
+    {
+      "id": "i7",
+      "question": "Why does a button do nothing on a static page?",
+      "modelAnswer": "With static SSR, the component is rendered once to HTML and disposed. No circuit or WebAssembly runtime is listening, so `@onclick` is never wired up. It fails silently."
+    },
+    {
+      "id": "i8",
+      "question": "How do you tell which mode a component is running in?",
+      "modelAnswer": "Look for `@rendermode` on the component, on its usage, or globally on `<Routes>` in `App.razor`. At runtime, check `RendererInfo.Name` / `RendererInfo.IsInteractive` (and `AssignedRenderMode`)."
+    }
+  ]
+}

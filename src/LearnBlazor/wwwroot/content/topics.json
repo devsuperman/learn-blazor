@@ -1,0 +1,12 @@
+[
+  { "id": "level-01-render-modes", "number": 1, "title": "Render modes", "summary": "Static SSR, Interactive Server, WebAssembly, Auto, and prerendering.", "available": true },
+  { "id": "level-02-components", "number": 2, "title": "Components and parameters", "summary": "Razor components, [Parameter], child content, and composition.", "available": false },
+  { "id": "level-03-binding-events", "number": 3, "title": "Data binding and events", "summary": "@bind, @onclick, EventCallback, and when the UI re-renders.", "available": false },
+  { "id": "level-04-lifecycle", "number": 4, "title": "Component lifecycle", "summary": "OnInitialized, OnParametersSet, OnAfterRender, and Dispose.", "available": false },
+  { "id": "level-05-routing", "number": 5, "title": "Routing and navigation", "summary": "@page, route parameters, NavigationManager, and NavLink.", "available": false },
+  { "id": "level-06-forms", "number": 6, "title": "Forms and validation", "summary": "EditForm, input components, and data annotations.", "available": false },
+  { "id": "level-07-dependency-injection", "number": 7, "title": "Dependency injection", "summary": "@inject, service lifetimes, and what Scoped means per mode.", "available": false },
+  { "id": "level-08-state", "number": 8, "title": "State and cascading values", "summary": "CascadingValue, state containers, and persisting prerendered state.", "available": false },
+  { "id": "level-09-js-interop", "number": 9, "title": "JavaScript interop", "summary": "IJSRuntime, JS modules, and calling .NET from JavaScript.", "available": false },
+  { "id": "level-10-data-auth", "number": 10, "title": "Calling APIs and auth", "summary": "HttpClient, AuthorizeView, and protecting pages.", "available": false }
+]

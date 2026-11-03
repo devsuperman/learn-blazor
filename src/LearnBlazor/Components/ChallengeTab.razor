@@ -1,0 +1,141 @@
+@{ var challenge = Lesson.Challenge; }
+
+@switch (Progress.Challenge)
+{
+    case ChallengeState.NotStarted:
+        <div class="callout">
+            <p><strong>@challenge.Minutes minutes, from scratch, without help.</strong></p>
+            <p>Starting the challenge locks the theory tab until you finish. Build the code in your IDE, then answer the questions here in your own words.</p>
+            <button class="btn btn-primary" @onclick="StartAsync">Start challenge</button>
+        </div>
+        break;
+
+    case ChallengeState.Running:
+        <StudyTimer Minutes="challenge.Minutes" Label="Challenge" />
+        <article class="card">
+            <h3>The task</h3>
+            <Markdown Text="@challenge.Statement" />
+        </article>
+        <article class="card">
+            <h3>Questions (own words, no AI)</h3>
+            @foreach (var q in challenge.Questions)
+            {
+                <label class="field-label" for="cq-@q.Id">@q.Text</label>
+                <textarea id="cq-@q.Id" rows="3" value="@Progress.ChallengeAnswers.GetValueOrDefault(q.Id, "")"
+                          @oninput="e => SetAnswer(q.Id, e.Value?.ToString())"></textarea>
+            }
+        </article>
+        <button class="btn btn-primary" @onclick="FinishAsync">I'm done: show the rubric</button>
+        break;
+
+    case ChallengeState.Finished:
+        <div class="callout">
+            Attempt @Progress.ChallengeAttempts. Check your code and answers against the rubric honestly.
+            A pass needs <strong>every</strong> criterion met.
+        </div>
+
+        <article class="card">
+            <h3>The task</h3>
+            <Markdown Text="@challenge.Statement" />
+        </article>
+
+        <article class="card">
+            <h3>Your answers vs. the model answers</h3>
+            @foreach (var q in challenge.Questions)
+            {
+                <div class="qa">
+                    <div class="qa-q">@q.Text</div>
+                    <div class="qa-mine"><span class="answer-label">You</span>
+                        <p>@(string.IsNullOrWhiteSpace(Progress.ChallengeAnswers.GetValueOrDefault(q.Id)) ? "(no answer)" : Progress.ChallengeAnswers[q.Id])</p>
+                    </div>
+                    <div class="answer"><span class="answer-label">Model answer</span><Markdown Text="@q.ModelAnswer" /></div>
+                </div>
+            }
+        </article>
+
+        <article class="card">
+            <h3>Rubric</h3>
+            <table class="rubric">
+                <thead><tr><th>Met?</th><th>Criterion</th><th>Pass looks like</th></tr></thead>
+                <tbody>
+                    @foreach (var item in challenge.Rubric)
+                    {
+                        <tr>
+                            <td><input type="checkbox" aria-label="@item.Criterion met"
+                                       checked="@Progress.RubricMet.Contains(item.Id)"
+                                       @onchange="e => ToggleRubric(item.Id, (bool)e.Value!)" /></td>
+                            <td>@item.Criterion</td>
+                            <td><Markdown Text="@item.PassLooksLike" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </article>
+
+        <div class="actions">
+            @if (Progress.Passed)
+            {
+                <span class="badge badge-passed">Level passed ✓</span>
+                <button class="btn btn-ghost" @onclick="UnpassAsync">Undo pass</button>
+            }
+            else
+            {
+                <button class="btn btn-primary" disabled="@(!AllMet)" @onclick="PassAsync">Mark level as passed</button>
+            }
+            <button class="btn" @onclick="StartAsync">Try again (new attempt)</button>
+        </div>
+        @if (!AllMet && !Progress.Passed)
+        {
+            <p class="muted">Not all criteria met? Re-read the theory, redo practice with a new exercise, then try again.</p>
+        }
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired] public Lesson Lesson { get; set; } = default!;
+    [Parameter, EditorRequired] public LessonProgress Progress { get; set; } = default!;
+    [Parameter] public EventCallback OnChange { get; set; }
+
+    private bool AllMet => Lesson.Challenge.Rubric.All(r => Progress.RubricMet.Contains(r.Id));
+
+    private Task StartAsync()
+    {
+        Progress.Challenge = ChallengeState.Running;
+        Progress.ChallengeAttempts++;
+        Progress.ChallengeAnswers.Clear();
+        Progress.RubricMet.Clear();
+        Progress.Passed = false;
+        return OnChange.InvokeAsync();
+    }
+
+    private Task FinishAsync()
+    {
+        Progress.Challenge = ChallengeState.Finished;
+        return OnChange.InvokeAsync();
+    }
+
+    private Task SetAnswer(string id, string? value)
+    {
+        Progress.ChallengeAnswers[id] = value ?? "";
+        return OnChange.InvokeAsync();
+    }
+
+    private Task ToggleRubric(string id, bool met)
+    {
+        if (met) Progress.RubricMet.Add(id);
+        else Progress.RubricMet.Remove(id);
+        return OnChange.InvokeAsync();
+    }
+
+    private Task PassAsync()
+    {
+        Progress.Passed = true;
+        return OnChange.InvokeAsync();
+    }
+
+    private Task UnpassAsync()
+    {
+        Progress.Passed = false;
+        return OnChange.InvokeAsync();
+    }
+}
