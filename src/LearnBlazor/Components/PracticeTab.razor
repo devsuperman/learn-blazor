@@ -1,48 +1,111 @@
+@inject IJSRuntime JS
+
 <p class="muted">
-    Do these steps on your own machine (.NET 10 SDK + any IDE). Type the code yourself: no copy-paste.
-    Tick each step when it is done.
+    Write the code in the box. Type it yourself: no copy-paste. <kbd>Tab</kbd> indents; press <kbd>Esc</kbd> first to leave the box with <kbd>Tab</kbd>.
+    <strong>Check</strong> looks for the key parts of the concept with simple rules. It is not a compiler, so it won't catch every typo.
+    The solution unlocks after your first check.
 </p>
 
 <div class="progress-line">
     <div class="progress-bar"><div style="width:@Percent%"></div></div>
-    <span>@Done / @Lesson.Practice.Count done</span>
+    <span>@PassRule.PracticePassedCount(Lesson, Progress) / @Lesson.Practice.Count pass</span>
 </div>
 
-<ol class="steps">
-    @foreach (var step in Lesson.Practice)
-    {
-        var done = Progress.PracticeDone.Contains(step.Id);
-        <li class="step @(done ? "step-done" : "")">
-            <label class="check">
-                <input type="checkbox" checked="@done" @onchange="e => Toggle(step.Id, (bool)e.Value!)" />
-                <span class="sr-only">Mark step done</span>
-            </label>
-            <div class="step-body">
-                <Markdown Text="@step.Text" />
-                @if (!string.IsNullOrWhiteSpace(step.Hint))
+@foreach (var ex in Lesson.Practice)
+{
+    var number = Lesson.Practice.IndexOf(ex) + 1;
+    var passed = Progress.PracticePassed.Contains(ex.Id);
+    var checkedOnce = Progress.PracticeChecked.Contains(ex.Id);
+    var userCode = Progress.PracticeCode.GetValueOrDefault(ex.Id, ex.Starter);
+
+    <article class="card exercise @(passed ? "exercise-passed" : "")">
+        <h3>@number · @ex.Title @if (passed) { <span class="badge badge-passed">Pass ✓</span> }</h3>
+        <Markdown Text="@ex.Task" />
+
+        @if (!string.IsNullOrWhiteSpace(ex.Hint))
+        {
+            <details class="hint">
+                <summary>Hint</summary>
+                <Markdown Text="@ex.Hint" />
+            </details>
+        }
+
+        <label class="field-label" for="code-@ex.Id">My code</label>
+        <textarea id="code-@ex.Id" class="code-input" rows="@Rows(userCode)"
+                  spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"
+                  value="@userCode" @oninput="e => SetCodeAsync(ex.Id, e.Value?.ToString())"></textarea>
+
+        <div class="actions">
+            <button class="btn btn-primary" @onclick="() => CheckAsync(ex)">Check</button>
+            <button class="btn btn-ghost" @onclick="() => ResetCodeAsync(ex)">Reset to starter</button>
+        </div>
+
+        @if (_results.TryGetValue(ex.Id, out var results))
+        {
+            <ul class="checks" aria-live="polite">
+                @foreach (var r in results)
                 {
-                    <details class="hint">
-                        <summary>Hint</summary>
-                        <Markdown Text="@step.Hint" />
-                    </details>
+                    <li class="@(r.Passed ? "ok" : "fail")">
+                        <span class="check-icon" aria-hidden="true">@(r.Passed ? "✓" : "✗")</span>
+                        <div>
+                            <Markdown Text="@r.Check.Label" Class="check-label" />
+                            @if (!r.Passed && !string.IsNullOrWhiteSpace(r.Check.Hint))
+                            {
+                                <Markdown Text="@r.Check.Hint" Class="check-hint" />
+                            }
+                        </div>
+                    </li>
                 }
-            </div>
-        </li>
-    }
-</ol>
+            </ul>
+        }
+
+        @if (checkedOnce)
+        {
+            <details class="hint">
+                <summary>Show a solution</summary>
+                <Markdown Text="@($"```razor\n{ex.Solution}\n```")" />
+            </details>
+        }
+    </article>
+}
+
+<LevelStatus Lesson="Lesson" Progress="Progress" />
 
 @code {
     [Parameter, EditorRequired] public Lesson Lesson { get; set; } = default!;
     [Parameter, EditorRequired] public LessonProgress Progress { get; set; } = default!;
     [Parameter] public EventCallback OnChange { get; set; }
 
-    private int Done => Lesson.Practice.Count(s => Progress.PracticeDone.Contains(s.Id));
-    private int Percent => Lesson.Practice.Count == 0 ? 0 : Done * 100 / Lesson.Practice.Count;
+    // Results of the last check in this visit. Pass/fail itself is saved in Progress.
+    private readonly Dictionary<string, IReadOnlyList<CodeChecker.Result>> _results = [];
 
-    private Task Toggle(string id, bool done)
+    private int Percent => Lesson.Practice.Count == 0 ? 0
+        : PassRule.PracticePassedCount(Lesson, Progress) * 100 / Lesson.Practice.Count;
+
+    private static int Rows(string code) => Math.Clamp(code.Count(ch => ch == '\n') + 2, 6, 30);
+
+    private Task SetCodeAsync(string id, string? value)
     {
-        if (done) Progress.PracticeDone.Add(id);
-        else Progress.PracticeDone.Remove(id);
+        Progress.PracticeCode[id] = value ?? "";
+        _results.Remove(id); // the last result no longer matches the code
         return OnChange.InvokeAsync();
+    }
+
+    private Task CheckAsync(PracticeExercise ex)
+    {
+        var results = CodeChecker.Run(ex, Progress.PracticeCode.GetValueOrDefault(ex.Id, ex.Starter));
+        _results[ex.Id] = results;
+        Progress.PracticeChecked.Add(ex.Id);
+        if (results.All(r => r.Passed)) Progress.PracticePassed.Add(ex.Id);
+        else Progress.PracticePassed.Remove(ex.Id);
+        return OnChange.InvokeAsync();
+    }
+
+    private async Task ResetCodeAsync(PracticeExercise ex)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Replace your code with the starter code?")) return;
+        Progress.PracticeCode.Remove(ex.Id);
+        _results.Remove(ex.Id);
+        await OnChange.InvokeAsync();
     }
 }

@@ -1,0 +1,54 @@
+@* One multiple-choice question. The first pick is final (until the parent clears it). *@
+
+<article class="card">
+    @if (!string.IsNullOrWhiteSpace(Heading))
+    {
+        <h3>@Heading</h3>
+    }
+    <Markdown Text="@Question.Body" />
+
+    <div class="choices" role="radiogroup" aria-label="Options">
+        @for (var i = 0; i < Question.Options.Count; i++)
+        {
+            var index = i;
+            <button type="button" role="radio" aria-checked="@(Chosen == index)"
+                    class="choice @ChoiceClass(index)" disabled="@Answered"
+                    @onclick="() => OnChoose.InvokeAsync(index)">
+                <span class="choice-key">@((char)('A' + index))</span>
+                <Markdown Text="@Question.Options[index]" Class="choice-text" />
+                @if (Answered && index == Question.Correct)
+                {
+                    <span class="choice-mark" aria-label="correct answer">✓</span>
+                }
+                else if (Answered && index == Chosen)
+                {
+                    <span class="choice-mark" aria-label="your answer, wrong">✗</span>
+                }
+            </button>
+        }
+    </div>
+
+    @if (Answered)
+    {
+        <div class="answer @(Chosen == Question.Correct ? "" : "answer-wrong")">
+            <span class="answer-label">@(Chosen == Question.Correct ? "Correct" : "Not quite")</span>
+            <Markdown Text="@Question.Explanation" />
+        </div>
+    }
+</article>
+
+@code {
+    [Parameter, EditorRequired] public ChoiceQuestion Question { get; set; } = default!;
+    [Parameter] public string? Heading { get; set; }
+    /// <summary>The option the user picked, or null if not answered yet.</summary>
+    [Parameter] public int? Chosen { get; set; }
+    [Parameter] public EventCallback<int> OnChoose { get; set; }
+
+    private bool Answered => Chosen is not null;
+
+    private string ChoiceClass(int index) =>
+        !Answered ? ""
+        : index == Question.Correct ? "choice-correct"
+        : index == Chosen ? "choice-wrong"
+        : "choice-dim";
+}

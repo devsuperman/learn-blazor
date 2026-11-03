@@ -16,53 +16,58 @@ public sealed class Lesson
     public int Number { get; set; }
     public string Title { get; set; } = "";
     public string Summary { get; set; } = "";
-    public List<PredictItem> Predict { get; set; } = [];
-    public List<PracticeStep> Practice { get; set; } = [];
-    public Challenge Challenge { get; set; } = new();
+    public List<ChoiceQuestion> Predict { get; set; } = [];
+    public List<PracticeExercise> Practice { get; set; } = [];
+    public List<ChoiceQuestion> Quiz { get; set; } = [];
+    /// <summary>Minimum quiz score (percent) needed to pass the level.</summary>
+    public int QuizPassPercent { get; set; } = 80;
     public List<InterviewQuestion> Interview { get; set; } = [];
 }
 
-public sealed class PredictItem
+/// <summary>A multiple-choice question, used by Predict and Quiz.</summary>
+public sealed class ChoiceQuestion
+{
+    public string Id { get; set; } = "";
+    /// <summary>Optional short heading (Predict uses it for the snippet name).</summary>
+    public string? Title { get; set; }
+    /// <summary>Markdown with the question (and the snippet, if any).</summary>
+    public string Body { get; set; } = "";
+    /// <summary>Markdown, one per option.</summary>
+    public List<string> Options { get; set; } = [];
+    /// <summary>Index into <see cref="Options"/>.</summary>
+    public int Correct { get; set; }
+    /// <summary>Markdown shown after the user picks an option.</summary>
+    public string Explanation { get; set; } = "";
+}
+
+/// <summary>A coding exercise written in a textbox and checked with simple rules.</summary>
+public sealed class PracticeExercise
 {
     public string Id { get; set; } = "";
     public string Title { get; set; } = "";
-    /// <summary>Markdown with the snippet and the question.</summary>
-    public string Body { get; set; } = "";
-    /// <summary>Markdown shown after the user writes a prediction.</summary>
-    public string Answer { get; set; } = "";
-}
-
-public sealed class PracticeStep
-{
-    public string Id { get; set; } = "";
     /// <summary>Markdown.</summary>
-    public string Text { get; set; } = "";
+    public string Task { get; set; } = "";
+    /// <summary>Code pre-filled in the textbox.</summary>
+    public string Starter { get; set; } = "";
+    /// <summary>A model solution, shown only after the first check.</summary>
+    public string Solution { get; set; } = "";
     /// <summary>Optional markdown hint, hidden until requested.</summary>
     public string? Hint { get; set; }
+    public List<CodeCheck> Checks { get; set; } = [];
 }
 
-public sealed class Challenge
-{
-    public int Minutes { get; set; } = 15;
-    /// <summary>Markdown.</summary>
-    public string Statement { get; set; } = "";
-    public List<ChallengeQuestion> Questions { get; set; } = [];
-    public List<RubricItem> Rubric { get; set; } = [];
-}
-
-public sealed class ChallengeQuestion
+/// <summary>One rule run against the user's code: a regex that must (or must not) match.</summary>
+public sealed class CodeCheck
 {
     public string Id { get; set; } = "";
-    public string Text { get; set; } = "";
-    /// <summary>Markdown, shown only after the challenge is finished.</summary>
-    public string ModelAnswer { get; set; } = "";
-}
-
-public sealed class RubricItem
-{
-    public string Id { get; set; } = "";
-    public string Criterion { get; set; } = "";
-    public string PassLooksLike { get; set; } = "";
+    /// <summary>What the rule checks, in plain words.</summary>
+    public string Label { get; set; } = "";
+    /// <summary>.NET regular expression.</summary>
+    public string Pattern { get; set; } = "";
+    /// <summary>When true, the check passes if the pattern does NOT match.</summary>
+    public bool MustNotMatch { get; set; }
+    /// <summary>Markdown shown when the check fails.</summary>
+    public string? Hint { get; set; }
 }
 
 public sealed class InterviewQuestion

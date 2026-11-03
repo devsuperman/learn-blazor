@@ -1,38 +1,17 @@
 # Level XX: <topic>
 
-Copy this folder to `level-XX-<topic>/` and fill in each block from the study plan.
+Copy this folder to `level-XX-<topic>/` and fill it in. The study content itself lives on the site, in
+`src/LearnBlazor/wwwroot/content/level-XX-<topic>/` (see "Add a level to the site" in the root README).
 
-## Checklist
+## Steps
 
-### Theory (15 min)
+1. **Theory:** one concept only.
+2. **Predict:** multiple-choice questions about short snippets.
+3. **Practice:** exercises written in a textbox, each with checks.
+4. **Quiz:** multiple-choice questions, at least 80% to pass.
+5. **Interview:** answer aloud first, then in writing.
 
-- [ ] Read about one concept only, then close the tab.
+## Pass
 
-### Predict (5 min)
-
-- [ ] Write predictions for the snippets in `notes.md` before running anything.
-
-### Practice (30 min)
-
-- [ ] Step 1
-- [ ] Step 2
-
-### Challenge (15 min, from scratch)
-
-- [ ] Task:
-- [ ] Answer the challenge questions in `notes.md`, without AI.
-
-### Note (5 min)
-
-- [ ] Write the 3-line note.
-
-### Review
-
-- [ ] Paste the challenge code and answers into a chat, saying "Level XX". It must run locally first.
-- [ ] Answer the follow-up and the interview questions.
-
-## Rubric (Pass only if all are met)
-
-| # | Criterion | Pass looks like |
-| --- | --- | --- |
-| 1 | | |
+- All exercises pass every check.
+- The quiz is fully answered with at least 80% correct.

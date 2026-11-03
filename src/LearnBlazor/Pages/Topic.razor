@@ -2,6 +2,7 @@
 @inject ContentService Content
 @inject ProgressService Progress
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 @if (_loading)
 {
@@ -23,7 +24,10 @@ else
             <h1>@_lesson.Title</h1>
             <p class="lead">@_lesson.Summary</p>
         </div>
-        <StatusBadge Status="@_progress.Status" ShowText="true" />
+        <div class="topic-meta">
+            <StatusBadge Status="@_progress.Status" ShowText="true" />
+            <button class="btn btn-small btn-ghost btn-danger" @onclick="ResetAsync">Reset level</button>
+        </div>
     </header>
 
     <nav class="tabs" role="tablist" aria-label="Study steps">
@@ -33,24 +37,15 @@ else
                aria-selected="@(tab.Key == CurrentTab)"
                href="@TabUrl(tab.Key)">
                 @tab.Label
-                @if (tab.Key == "theory" && _progress.TheoryLocked)
-                {
-                    <span aria-label="locked"> 🔒</span>
-                }
             </a>
         }
     </nav>
-
-    @if (TabMinutes(CurrentTab) is int minutes)
-    {
-        <StudyTimer @key="@($"{Id}:{CurrentTab}")" Minutes="minutes" Label="@($"{CurrentLabel} block")" />
-    }
 
     <section class="tab-panel" role="tabpanel">
         @switch (CurrentTab)
         {
             case "theory":
-                <TheoryTab Theory="@_theory" Progress="_progress" ChallengeUrl="@TabUrl("challenge")" />
+                <Markdown Text="@_theory" />
                 break;
             case "predict":
                 <PredictTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
@@ -58,14 +53,11 @@ else
             case "practice":
                 <PracticeTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
                 break;
-            case "challenge":
-                <ChallengeTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
+            case "quiz":
+                <QuizTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
                 break;
             case "interview":
                 <InterviewTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
-                break;
-            case "notes":
-                <NotesTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" OnReset="ResetAsync" />
                 break;
         }
     </section>
@@ -79,14 +71,13 @@ else
 }
 
 @code {
-    private static readonly (string Key, string Label, int? Minutes)[] Tabs =
+    private static readonly (string Key, string Label)[] Tabs =
     [
-        ("theory", "1 · Theory", 15),
-        ("predict", "2 · Predict", 5),
-        ("practice", "3 · Practice", 30),
-        ("challenge", "4 · Challenge", null), // the challenge tab runs its own timer
-        ("notes", "5 · Note", 5),
-        ("interview", "Interview", null),
+        ("theory", "1 · Theory"),
+        ("predict", "2 · Predict"),
+        ("practice", "3 · Practice"),
+        ("quiz", "4 · Quiz"),
+        ("interview", "Interview"),
     ];
 
     private Lesson? _lesson;
@@ -98,18 +89,15 @@ else
     [SupplyParameterFromQuery] public string? Tab { get; set; }
 
     private string CurrentTab => Tabs.Any(t => t.Key == Tab) ? Tab! : "theory";
-    private string CurrentLabel => Tabs.First(t => t.Key == CurrentTab).Label.Split(" · ").Last();
 
     private (string Key, string Label)? NextTab
     {
         get
         {
             var i = Array.FindIndex(Tabs, t => t.Key == CurrentTab);
-            return i + 1 < Tabs.Length ? (Tabs[i + 1].Key, Tabs[i + 1].Label) : null;
+            return i + 1 < Tabs.Length ? Tabs[i + 1] : null;
         }
     }
-
-    private static int? TabMinutes(string key) => Tabs.First(t => t.Key == key).Minutes;
 
     private string TabUrl(string key) => $"topic/{Id}?tab={key}";
 
@@ -123,12 +111,22 @@ else
         _theory = loaded?.Theory ?? "";
         _progress = loaded is null ? null : await Progress.GetAsync(Id);
         _loading = false;
+
+        // Content can change between deploys: keep the stored pass flag honest.
+        if (_lesson is not null && _progress is not null && _progress.Passed != PassRule.IsPassed(_lesson, _progress))
+            await SaveAsync();
     }
 
-    private Task SaveAsync() => Progress.SaveAsync(Id, _progress!);
+    private Task SaveAsync()
+    {
+        _progress!.Passed = PassRule.IsPassed(_lesson!, _progress);
+        return Progress.SaveAsync(Id, _progress);
+    }
 
     private async Task ResetAsync()
     {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Erase all your answers and code for Level {_lesson!.Number}? This cannot be undone."))
+            return;
         await Progress.ResetAsync(Id);
         _progress = await Progress.GetAsync(Id);
         Nav.NavigateTo(TabUrl("theory"));

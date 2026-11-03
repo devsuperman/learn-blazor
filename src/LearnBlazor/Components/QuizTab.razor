@@ -1,0 +1,51 @@
+@inject IJSRuntime JS
+
+<p class="muted">
+    No theory open, no running code. Your first pick on each question counts.
+    You need @Lesson.QuizPassPercent% to pass. You can retake the quiz as many times as you like.
+</p>
+
+<div class="callout @(PassRule.QuizPassed(Lesson, Progress) ? "callout-ok" : "")">
+    <strong>Score: @PassRule.QuizCorrect(Lesson, Progress) / @Lesson.Quiz.Count</strong>
+    (@Answered answered@(Complete ? $", {PassRule.QuizPercent(Lesson, Progress)}%" : ""))
+    @if (Complete)
+    {
+        <span> · @(PassRule.QuizPassed(Lesson, Progress) ? "Quiz passed ✓" : $"Below {Lesson.QuizPassPercent}%: re-read the theory and retake it.")</span>
+    }
+    @if (Answered > 0)
+    {
+        <div class="actions"><button class="btn btn-small" @onclick="RetakeAsync">Retake quiz</button></div>
+    }
+</div>
+
+@foreach (var q in Lesson.Quiz)
+{
+    var number = Lesson.Quiz.IndexOf(q) + 1;
+    <ChoiceCard Question="q" Heading="@($"Question {number}")"
+                Chosen="@(Progress.QuizChoices.TryGetValue(q.Id, out var c) ? c : null)"
+                OnChoose="i => ChooseAsync(q.Id, i)" />
+}
+
+<LevelStatus Lesson="Lesson" Progress="Progress" />
+
+@code {
+    [Parameter, EditorRequired] public Lesson Lesson { get; set; } = default!;
+    [Parameter, EditorRequired] public LessonProgress Progress { get; set; } = default!;
+    [Parameter] public EventCallback OnChange { get; set; }
+
+    private int Answered => Lesson.Quiz.Count(q => Progress.QuizChoices.ContainsKey(q.Id));
+    private bool Complete => PassRule.QuizComplete(Lesson, Progress);
+
+    private Task ChooseAsync(string id, int index)
+    {
+        if (!Progress.QuizChoices.TryAdd(id, index)) return Task.CompletedTask;
+        return OnChange.InvokeAsync();
+    }
+
+    private async Task RetakeAsync()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Clear your quiz answers and start again?")) return;
+        Progress.QuizChoices.Clear();
+        await OnChange.InvokeAsync();
+    }
+}

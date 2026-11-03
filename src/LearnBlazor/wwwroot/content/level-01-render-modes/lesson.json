@@ -8,113 +8,392 @@
       "id": "A",
       "title": "No render mode",
       "body": "In a Blazor Web App, this page has **no** `@rendermode`. You open `/a` and click the button 3 times.\n\n```razor\n@page \"/a\"\n\n<p>Count: @count</p>\n<button @onclick=\"() => count++\">+1</button>\n\n@code {\n    private int count;\n}\n```\n\n**What does the page show after 3 clicks?**",
-      "answer": "**Count: 0.** Nothing happens. Without `@rendermode`, the page is **static SSR**: the server sends HTML and disposes the component. The `@onclick` handler is never wired up, because no C# is listening in the browser or on the server. There is no error, which is why this bug is easy to miss."
+      "options": [
+        "Count: 3",
+        "Count: 0, and nothing happens",
+        "Count: 0, and an error appears in the console",
+        "Count: 1"
+      ],
+      "correct": 1,
+      "explanation": "**Count: 0.** Nothing happens. Without `@rendermode`, the page is **static SSR**: the server sends HTML and disposes the component. The `@onclick` handler is never wired up, because no C# is listening in the browser or on the server. There is no error, which is why this bug is easy to miss."
     },
     {
       "id": "B",
       "title": "Interactive Server",
-      "body": "Same page, one line added. You click the button 3 times.\n\n```razor\n@page \"/b\"\n@rendermode InteractiveServer\n\n<p>Count: @count</p>\n<button @onclick=\"() => count++\">+1</button>\n\n@code {\n    private int count;\n}\n```\n\n**What does the page show, and what travels over the network on each click?**",
-      "answer": "**Count: 3.** Each click is sent to the server over the SignalR **WebSocket**. The server runs `count++`, re-renders, and sends back only the **diff** (the changed text). You don't need `StateHasChanged()`: Blazor re-renders automatically after an event handler."
+      "body": "Same page, one line added. You click the button 3 times.\n\n```razor\n@page \"/b\"\n@rendermode InteractiveServer\n\n<p>Count: @count</p>\n<button @onclick=\"() => count++\">+1</button>\n\n@code {\n    private int count;\n}\n```\n\n**What does the page show after 3 clicks, and what happens on each click?**",
+      "options": [
+        "Count: 3. Each click goes to the server over a WebSocket, and the server sends back only what changed.",
+        "Count: 3. Each click reloads the whole page with a normal HTTP request.",
+        "Count: 3. The C# runs in the browser, so nothing goes over the network.",
+        "Count: 0, because you must call `StateHasChanged()` after `count++`."
+      ],
+      "correct": 0,
+      "explanation": "**Count: 3.** Each click is sent to the server over the SignalR **WebSocket**. The server runs `count++`, re-renders, and sends back only the **diff** (the changed text). You don't need `StateHasChanged()`: Blazor re-renders automatically after an event handler."
     },
     {
       "id": "C",
       "title": "How many times?",
-      "body": "```razor\n@page \"/c\"\n@rendermode InteractiveServer\n\n<p>Hello</p>\n\n@code {\n    protected override void OnInitialized()\n    {\n        Console.WriteLine(\"C initialized\");\n    }\n}\n```\n\n**You load `/c` once (a full page load). How many times does \"C initialized\" print, and where?**",
-      "answer": "**Twice, both in the server console** (the terminal where `dotnet run` runs). The first time is during **prerendering** (static HTML). The second is when the circuit starts and the component becomes interactive. With `prerender: false`, it prints only once."
+      "body": "```razor\n@page \"/c\"\n@rendermode InteractiveServer\n\n<p>Hello</p>\n\n@code {\n    protected override void OnInitialized()\n    {\n        Console.WriteLine(\"C initialized\");\n    }\n}\n```\n\n**You load `/c` once (a full page load). How many times does \"C initialized\" print?**",
+      "options": [
+        "Once, in the server console",
+        "Twice, in the server console",
+        "Once in the server console and once in the browser console",
+        "Never, because `Console.WriteLine` doesn't work in Blazor"
+      ],
+      "correct": 1,
+      "explanation": "**Twice, both in the server console** (the terminal where `dotnet run` runs). The first time is during **prerendering** (static HTML). The second is when the circuit starts and the component becomes interactive. With `prerender: false`, it prints only once."
     },
     {
       "id": "D",
       "title": "WebAssembly console",
       "body": "Same as C, but the component is in the `.Client` project and uses:\n\n```razor\n@rendermode InteractiveWebAssembly\n```\n\n**After one full page load, where does \"C initialized\" appear?**",
-      "answer": "**Once in the server console** (prerendering happens on the server) and **once in the browser's dev tools console** (the WebAssembly render runs in the browser, so `Console.WriteLine` goes there)."
+      "options": [
+        "Only in the server console, once",
+        "Only in the browser console, once",
+        "Once in the server console and once in the browser console",
+        "Twice in the browser console"
+      ],
+      "correct": 2,
+      "explanation": "**Once in the server console** (prerendering happens on the server) and **once in the browser's dev tools console** (the WebAssembly render runs in the browser, so `Console.WriteLine` goes there)."
     }
   ],
   "practice": [
     {
-      "id": "p1",
-      "text": "**Create the app** in your own folder (for example `learn-blazor/level-01-render-modes/code`):\n\n```bash\ndotnet new blazor -n RenderModesLab -int Auto\n```\n\nYou get two projects: `RenderModesLab` (server) and `RenderModesLab.Client` (the code sent to the browser).",
-      "hint": "If the options are different in your SDK, run `dotnet new blazor --help`. `-int Auto` enables both Server and WebAssembly, so you can try all four modes."
+      "id": "e1",
+      "title": "A static page",
+      "task": "Write the `/static` page: a counter button, plus a line that shows `RendererInfo.Name` and `RendererInfo.IsInteractive`. Use **no** render mode.\n\nIn a real app this page renders once and the button does nothing. Keep that in mind for the quiz.",
+      "starter": "@page \"/static\"\n\n",
+      "solution": "@page \"/static\"\n\n<p>Mode: @RendererInfo.Name / Interactive: @RendererInfo.IsInteractive</p>\n<p>Count: @count</p>\n<button @onclick=\"() => count++\">+1</button>\n\n@code {\n    private int count;\n}",
+      "hint": "`RendererInfo` is available in every component; you don't need to inject anything.",
+      "checks": [
+        {
+          "id": "page",
+          "label": "Route is `@page \"/static\"`",
+          "pattern": "^\\s*@page\\s+\"/static\"\\s*$",
+          "hint": "The first line should be `@page \"/static\"`."
+        },
+        {
+          "id": "no-rm",
+          "label": "No `@rendermode` (this page must stay static)",
+          "pattern": "@rendermode\\b",
+          "mustNotMatch": true,
+          "hint": "Delete the `@rendermode` line: static is the default."
+        },
+        {
+          "id": "name",
+          "label": "Shows `RendererInfo.Name`",
+          "pattern": "@\\(?\\s*RendererInfo\\.Name\\b",
+          "hint": "Add a line like `<p>@RendererInfo.Name</p>`."
+        },
+        {
+          "id": "interactive",
+          "label": "Shows `RendererInfo.IsInteractive`",
+          "pattern": "@\\(?\\s*RendererInfo\\.IsInteractive\\b",
+          "hint": "Add `@RendererInfo.IsInteractive` to the markup."
+        },
+        {
+          "id": "onclick",
+          "label": "A button with `@onclick` that changes the count",
+          "pattern": "@onclick\\s*=",
+          "hint": "Use `<button @onclick=\"...\">`."
+        },
+        {
+          "id": "field",
+          "label": "A field holds the count",
+          "pattern": "\\bint\\s+\\w+\\s*(=\\s*0\\s*)?;",
+          "hint": "Declare `private int count;` in `@code`."
+        }
+      ]
     },
     {
-      "id": "p2",
-      "text": "**Create `/static`** in the server project: a counter button and a line showing `RendererInfo.Name` and `RendererInfo.IsInteractive`. Use **no** `@rendermode`.",
-      "hint": "`<p>@RendererInfo.Name / @RendererInfo.IsInteractive</p>` works in any component."
+      "id": "e2",
+      "title": "Make it interactive on the server",
+      "task": "This counter does nothing when you click it. Make it run as **Interactive Server**, so the clicks work. Don't add anything that isn't needed.",
+      "starter": "@page \"/server\"\n\n<p>Mode: @RendererInfo.Name / Interactive: @RendererInfo.IsInteractive</p>\n<p>Count: @count</p>\n<button @onclick=\"Increment\">+1</button>\n\n@code {\n    private int count;\n\n    private void Increment()\n    {\n        count++;\n    }\n}",
+      "solution": "@page \"/server\"\n@rendermode InteractiveServer\n\n<p>Mode: @RendererInfo.Name / Interactive: @RendererInfo.IsInteractive</p>\n<p>Count: @count</p>\n<button @onclick=\"Increment\">+1</button>\n\n@code {\n    private int count;\n\n    private void Increment()\n    {\n        count++;\n    }\n}",
+      "checks": [
+        {
+          "id": "page",
+          "label": "Route is `@page \"/server\"`",
+          "pattern": "^\\s*@page\\s+\"/server\"\\s*$",
+          "hint": "The first line should be `@page \"/server\"`."
+        },
+        {
+          "id": "rm",
+          "label": "Uses `@rendermode InteractiveServer`",
+          "pattern": "@rendermode\\s+(RenderMode\\.)?InteractiveServer\\s*$",
+          "hint": "Add `@rendermode InteractiveServer` under the `@page` line."
+        },
+        {
+          "id": "onclick",
+          "label": "A button with `@onclick` that changes the count",
+          "pattern": "@onclick\\s*=",
+          "hint": "Use `<button @onclick=\"...\">`."
+        },
+        {
+          "id": "no-shc",
+          "label": "No `StateHasChanged()` call (Blazor re-renders after an event handler on its own)",
+          "pattern": "StateHasChanged\\s*\\(",
+          "mustNotMatch": true,
+          "hint": "Remove `StateHasChanged()`: it is not needed after `@onclick`."
+        }
+      ]
     },
     {
-      "id": "p3",
-      "text": "**Create `/server`**: the same page with `@rendermode InteractiveServer`, in the server project."
+      "id": "e3",
+      "title": "Run it in the browser",
+      "task": "Write a `/wasm` page with the same counter and `RendererInfo` line, but running in **WebAssembly** (the C# runs in the browser).\n\nIn a Blazor Web App this file goes in the `.Client` project.",
+      "starter": "",
+      "solution": "@page \"/wasm\"\n@rendermode InteractiveWebAssembly\n\n<p>Mode: @RendererInfo.Name / Interactive: @RendererInfo.IsInteractive</p>\n<p>Count: @count</p>\n<button @onclick=\"() => count++\">+1</button>\n\n@code {\n    private int count;\n}",
+      "checks": [
+        {
+          "id": "page",
+          "label": "Route is `@page \"/wasm\"`",
+          "pattern": "^\\s*@page\\s+\"/wasm\"\\s*$",
+          "hint": "The first line should be `@page \"/wasm\"`."
+        },
+        {
+          "id": "rm",
+          "label": "Uses `@rendermode InteractiveWebAssembly`",
+          "pattern": "@rendermode\\s+(RenderMode\\.)?InteractiveWebAssembly\\s*$",
+          "hint": "The mode is `InteractiveWebAssembly`."
+        },
+        {
+          "id": "name",
+          "label": "Shows `RendererInfo.Name`",
+          "pattern": "@\\(?\\s*RendererInfo\\.Name\\b",
+          "hint": "Add a line like `<p>@RendererInfo.Name</p>`."
+        },
+        {
+          "id": "interactive",
+          "label": "Shows `RendererInfo.IsInteractive`",
+          "pattern": "@\\(?\\s*RendererInfo\\.IsInteractive\\b",
+          "hint": "Add `@RendererInfo.IsInteractive` to the markup."
+        },
+        {
+          "id": "onclick",
+          "label": "A button with `@onclick` that changes the count",
+          "pattern": "@onclick\\s*=",
+          "hint": "Use `<button @onclick=\"...\">`."
+        },
+        {
+          "id": "no-shc",
+          "label": "No `StateHasChanged()` call (Blazor re-renders after an event handler on its own)",
+          "pattern": "StateHasChanged\\s*\\(",
+          "mustNotMatch": true,
+          "hint": "Remove `StateHasChanged()`: it is not needed after `@onclick`."
+        }
+      ]
     },
     {
-      "id": "p4",
-      "text": "**Create `/wasm`** with `@rendermode InteractiveWebAssembly`, and **`/auto`** with `@rendermode InteractiveAuto`. Both go in the **`.Client`** project.",
-      "hint": "If the page returns 404, check that the file is in the `.Client` project and that `Program.cs` calls `.AddAdditionalAssemblies(...)` with the client assembly (the template already does this)."
+      "id": "e4",
+      "title": "Stop the double run",
+      "task": "This page prints \"Loaded\" **twice** in the server console on every full page load. Change only the render mode so it prints **once**, and keep it Interactive Server.",
+      "starter": "@page \"/once\"\n@rendermode InteractiveServer\n\n<p>Hello</p>\n\n@code {\n    protected override void OnInitialized()\n    {\n        Console.WriteLine(\"Loaded\");\n    }\n}",
+      "solution": "@page \"/once\"\n@rendermode @(new InteractiveServerRenderMode(prerender: false))\n\n<p>Hello</p>\n\n@code {\n    protected override void OnInitialized()\n    {\n        Console.WriteLine(\"Loaded\");\n    }\n}",
+      "hint": "It runs twice because of **prerendering**. A render mode can be created with `new` and options.",
+      "checks": [
+        {
+          "id": "prerender",
+          "label": "Prerendering is off: `@rendermode @(new InteractiveServerRenderMode(prerender: false))`",
+          "pattern": "@rendermode\\s+@\\(\\s*new\\s+InteractiveServerRenderMode\\s*\\(\\s*prerender\\s*:\\s*false\\s*\\)\\s*\\)",
+          "hint": "Write the mode as an expression: `@rendermode @(new ...(prerender: false))`."
+        },
+        {
+          "id": "oninit",
+          "label": "`OnInitialized` still writes the line",
+          "pattern": "OnInitialized\\s*\\(\\s*\\)[\\s\\S]*Console\\.WriteLine",
+          "hint": "Keep the `OnInitialized` method as it was."
+        }
+      ]
     },
     {
-      "id": "p5",
-      "text": "**Run the app** (`dotnet run` in the server project). Visit all four pages and write down whether the count changes, and what `Name` and `IsInteractive` show. Put this in the Note tab's free notes."
-    },
-    {
-      "id": "p6",
-      "text": "**Dev tools:** on `/server`, find the WebSocket in the Network tab (filter: WS). On `/wasm`, find the `.wasm` downloads. On `/static`, use View Source and check that the full HTML is there."
-    },
-    {
-      "id": "p7",
-      "text": "On `/server`, add `Console.WriteLine` in `OnInitialized`. Reload once and **count the lines** in the terminal."
-    },
-    {
-      "id": "p8",
-      "text": "Disable prerendering with `@rendermode @(new InteractiveServerRenderMode(prerender: false))`. Reload and **count again**. Also look at View Source: what changed?",
-      "hint": "Without prerendering, the server sends almost no HTML for the component, and it appears only when the circuit is ready."
+      "id": "e5",
+      "title": "The /modes page (from scratch)",
+      "task": "Close the theory and build a `/modes` page with **Interactive Server** that shows:\n\n- the render mode name and whether it is interactive\n- a click counter\n- the time of the last click",
+      "starter": "",
+      "solution": "@page \"/modes\"\n@rendermode InteractiveServer\n\n<p>Mode: @RendererInfo.Name / Interactive: @RendererInfo.IsInteractive</p>\n<p>Clicks: @count</p>\n<p>Last click: @(lastClick?.ToString(\"HH:mm:ss\") ?? \"never\")</p>\n<button @onclick=\"Click\">Click me</button>\n\n@code {\n    private int count;\n    private DateTime? lastClick;\n\n    private void Click()\n    {\n        count++;\n        lastClick = DateTime.Now;\n    }\n}",
+      "checks": [
+        {
+          "id": "page",
+          "label": "Route is `@page \"/modes\"`",
+          "pattern": "^\\s*@page\\s+\"/modes\"\\s*$",
+          "hint": "The first line should be `@page \"/modes\"`."
+        },
+        {
+          "id": "rm",
+          "label": "Uses `@rendermode InteractiveServer`",
+          "pattern": "@rendermode\\s+(RenderMode\\.)?InteractiveServer\\s*$"
+        },
+        {
+          "id": "name",
+          "label": "Shows `RendererInfo.Name`",
+          "pattern": "@\\(?\\s*RendererInfo\\.Name\\b",
+          "hint": "Add a line like `<p>@RendererInfo.Name</p>`."
+        },
+        {
+          "id": "interactive",
+          "label": "Shows `RendererInfo.IsInteractive`",
+          "pattern": "@\\(?\\s*RendererInfo\\.IsInteractive\\b",
+          "hint": "Add `@RendererInfo.IsInteractive` to the markup."
+        },
+        {
+          "id": "onclick",
+          "label": "A button with `@onclick` that changes the count",
+          "pattern": "@onclick\\s*=",
+          "hint": "Use `<button @onclick=\"...\">`."
+        },
+        {
+          "id": "time-field",
+          "label": "A `DateTime` field stores the last click",
+          "pattern": "\\bDateTime(Offset)?\\??\\s+\\w+\\s*(=[^;]*)?;",
+          "hint": "Declare a field such as `private DateTime? lastClick;`."
+        },
+        {
+          "id": "time-set",
+          "label": "The click handler sets it to the current time",
+          "pattern": "=\\s*DateTime(Offset)?\\.(Now|UtcNow)\\b",
+          "hint": "Assign `DateTime.Now` inside the click handler."
+        },
+        {
+          "id": "time-shown",
+          "label": "The page displays that field",
+          "pattern": "(?s)^(?=.*\\bDateTime(Offset)?\\??\\s+(?<f>\\w+)\\s*(=[^;]*)?;).*@\\(?\\s*\\k<f>\\b",
+          "hint": "Show the field in the markup, for example `@lastClick`."
+        },
+        {
+          "id": "no-shc",
+          "label": "No `StateHasChanged()` call (Blazor re-renders after an event handler on its own)",
+          "pattern": "StateHasChanged\\s*\\(",
+          "mustNotMatch": true,
+          "hint": "Remove `StateHasChanged()`: it is not needed after `@onclick`."
+        }
+      ]
     }
   ],
-  "challenge": {
-    "minutes": 15,
-    "statement": "In a **new** Blazor Web App, build from scratch a `/modes` page using **Interactive Server** that shows:\n\n- the render mode name and whether it is interactive\n- a click counter\n- the time of the last click\n\nRun it with `dotnet run` and check that it works before you finish. Then answer the three questions below.",
-    "questions": [
-      {
-        "id": "q1",
-        "text": "Why does the button work on /server but not on /static?",
-        "modelAnswer": "A static page is **only HTML**: the server renders it and disposes the component, so **no circuit** and no C# are listening for the click. On `/server`, a SignalR circuit keeps the component alive on the server and receives events."
-      },
-      {
-        "id": "q2",
-        "text": "On /wasm, where does the C# code run, and what does the browser download first?",
-        "modelAnswer": "**In the browser**, on .NET compiled to WebAssembly. First the browser downloads the **.NET runtime and the app's assemblies** (the `_framework/*.wasm` and `.dll` files)."
-      },
-      {
-        "id": "q3",
-        "text": "Why did the console line print twice before you disabled prerendering?",
-        "modelAnswer": "Because of **prerendering**: the component is rendered once on the server as static HTML, and then **again** when it becomes interactive, so `OnInitialized` runs both times."
-      }
-    ],
-    "rubric": [
-      {
-        "id": "r1",
-        "criterion": "Render mode",
-        "passLooksLike": "`@rendermode InteractiveServer` is on the `/modes` page"
-      },
-      {
-        "id": "r2",
-        "criterion": "Mode info",
-        "passLooksLike": "The page shows `RendererInfo.Name` and `RendererInfo.IsInteractive`"
-      },
-      {
-        "id": "r3",
-        "criterion": "Counter",
-        "passLooksLike": "`@onclick` increments the count, with no needless `StateHasChanged()`"
-      },
-      {
-        "id": "r4",
-        "criterion": "Last click time",
-        "passLooksLike": "A field stores the time and the page displays it"
-      },
-      {
-        "id": "r5",
-        "criterion": "Written answers",
-        "passLooksLike": "Q1: static = HTML only, no circuit. Q2: runs in the browser after runtime + assemblies download. Q3: prerender on the server, then again when interactive"
-      }
-    ]
-  },
+  "quiz": [
+    {
+      "id": "q1",
+      "body": "You open `/server` (Interactive Server) with the browser dev tools on the **Network** tab, filtered to **WS**. What do you see?",
+      "options": [
+        "Nothing: Blazor Server uses plain HTTP requests",
+        "A new WebSocket for every click",
+        "One WebSocket (`_blazor`) that stays open while you are on the page",
+        "`.wasm` file downloads"
+      ],
+      "correct": 2,
+      "explanation": "Interactive Server keeps **one SignalR connection** (a WebSocket to `_blazor`) open. Clicks and UI diffs travel over it."
+    },
+    {
+      "id": "q2",
+      "body": "On the first visit to `/wasm` (Interactive WebAssembly), what does the browser download before the page becomes interactive?",
+      "options": [
+        "The .NET runtime and the app's assemblies (`_framework/*.wasm` and `.dll` files)",
+        "Only the page HTML",
+        "A SignalR client, then nothing else",
+        "The C# source files, compiled in the browser"
+      ],
+      "correct": 0,
+      "explanation": "WebAssembly mode runs real .NET in the browser, so it first downloads the **runtime and the assemblies** from `_framework/`."
+    },
+    {
+      "id": "q3",
+      "body": "On `/static` (no render mode) you use **View Source**. What do you find?",
+      "options": [
+        "An empty `<div>` filled in later by JavaScript",
+        "Only a `<script>` tag that loads Blazor",
+        "Razor code (`@count`)",
+        "The full HTML of the page, including `Count: 0`"
+      ],
+      "correct": 3,
+      "explanation": "Static SSR sends **complete HTML** from the server. That is all the page is: nothing is listening for clicks."
+    },
+    {
+      "id": "q4",
+      "body": "Why does the button on `/static` do nothing, with no error?",
+      "options": [
+        "The `@onclick` syntax is wrong",
+        "After rendering, the component is disposed and no circuit or WebAssembly runtime is listening for events",
+        "The browser blocks the click",
+        "You must call `StateHasChanged()`"
+      ],
+      "correct": 1,
+      "explanation": "With static SSR, the component is rendered once to HTML and disposed. No circuit or WebAssembly runtime is listening, so `@onclick` is never wired up. It fails silently."
+    },
+    {
+      "id": "q5",
+      "body": "What does `RendererInfo.Name` show on the `/static` page?",
+      "options": [
+        "`Server`",
+        "`WebAssembly`",
+        "`Static`",
+        "`None`"
+      ],
+      "correct": 2,
+      "explanation": "`Static` for static SSR, `Server` for Interactive Server, `WebAssembly` for WebAssembly. `IsInteractive` is `false` on a static page."
+    },
+    {
+      "id": "q6",
+      "body": "During **prerendering** of an Interactive Server page, what is `RendererInfo.IsInteractive`?",
+      "options": [
+        "`true`, because the page uses `InteractiveServer`",
+        "It throws an exception",
+        "It depends on the browser",
+        "`false`, because the prerender is static HTML; it becomes `true` once the circuit starts"
+      ],
+      "correct": 3,
+      "explanation": "The prerender is a **static** render on the server, so `IsInteractive` is `false` (and `Name` is `Static`). After the circuit starts, the component renders again as `Server` / `true`. This is why you may briefly see a disabled-looking UI."
+    },
+    {
+      "id": "q7",
+      "body": "In a Blazor Web App, where must a component with `@rendermode InteractiveWebAssembly` or `InteractiveAuto` live?",
+      "options": [
+        "In the `.Client` project, so it is part of the code sent to the browser",
+        "In the server project, next to `App.razor`",
+        "Anywhere: the mode decides where it runs",
+        "In `wwwroot`"
+      ],
+      "correct": 0,
+      "explanation": "Code that may run in the browser must be in the **`.Client`** project. Otherwise the browser never gets the assembly, and the route returns 404."
+    },
+    {
+      "id": "q8",
+      "body": "What does **Interactive Auto** do on a user's first visit?",
+      "options": [
+        "It always uses WebAssembly",
+        "It uses Interactive Server while the WebAssembly files download in the background; later visits use WebAssembly",
+        "It picks the faster mode at random",
+        "It renders static HTML only"
+      ],
+      "correct": 1,
+      "explanation": "It starts with Interactive Server for a fast first render while downloading the WebAssembly bundle in the background. Later visits use WebAssembly. The component must live in the `.Client` project and work in both places."
+    },
+    {
+      "id": "q9",
+      "body": "After `@onclick` runs `count++` in an interactive component, do you need `StateHasChanged()`?",
+      "options": [
+        "Yes, always",
+        "Only in Interactive Server",
+        "Only in WebAssembly",
+        "No: Blazor re-renders the component after an event handler on its own"
+      ],
+      "correct": 3,
+      "explanation": "Blazor calls `StateHasChanged` for you **after an event handler**. You need it yourself only when state changes outside an event, for example in a timer callback."
+    },
+    {
+      "id": "q10",
+      "body": "You open an AI-generated Blazor Web App and no page has `@rendermode`, yet every button works. Where is the render mode most likely set?",
+      "options": [
+        "Globally, on `<Routes @rendermode=\"...\" />` (and `<HeadOutlet>`) in `App.razor`",
+        "In `appsettings.json`",
+        "In `launchSettings.json`",
+        "Nowhere: interactive is the default"
+      ],
+      "correct": 0,
+      "explanation": "A render mode on `<Routes>` in `App.razor` applies to **every page**. Static SSR is the default, so if buttons work, the mode is set somewhere."
+    }
+  ],
+  "quizPassPercent": 80,
   "interview": [
     {
       "id": "i1",
