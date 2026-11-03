@@ -3,12 +3,12 @@
 <article class="card level-status">
     <h3>@(PassRule.IsPassed(Lesson, Progress) ? "Level passed ✓" : "To pass this level")</h3>
     <ul class="status-list">
-        <li class="@(PassRule.PracticeDone(Lesson, Progress) ? "ok" : "")">
-            Practice: @PassRule.PracticePassedCount(Lesson, Progress) / @Lesson.Practice.Count exercises pass every check
-        </li>
         <li class="@(PassRule.QuizPassed(Lesson, Progress) ? "ok" : "")">
             Quiz: all @Lesson.Quiz.Count questions answered, at least @Lesson.QuizPassPercent% correct
             (now @PassRule.QuizCorrect(Lesson, Progress) / @Lesson.Quiz.Count)
+        </li>
+        <li class="@(PassRule.PracticeDone(Lesson, Progress) ? "ok" : "")">
+            Practice: @PassRule.PracticePassedCount(Lesson, Progress) / @Lesson.Practice.Count exercises pass every check
         </li>
     </ul>
 </article>

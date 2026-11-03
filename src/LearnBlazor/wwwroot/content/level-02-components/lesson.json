@@ -1,0 +1,435 @@
+{
+  "id": "level-02-components",
+  "number": 2,
+  "title": "Components and parameters",
+  "summary": "Build components, pass data down with parameters, and pass markup with RenderFragment.",
+  "predict": [
+    {
+      "id": "A",
+      "title": "No [Parameter]",
+      "body": "Greeting.razor:\n\n```razor\n<h3>Hello, @Name!</h3>\n\n@code {\n    public string Name { get; set; } = \"\";\n}\n```\n\nA page uses it like this:\n\n```razor\n<Greeting Name=\"Ana\" />\n```\n\n**What happens when the page renders?**",
+      "options": [
+        "It shows **Hello, Ana!**",
+        "It shows **Hello, !**",
+        "An error: `Greeting` has no parameter matching `Name`",
+        "It shows the text `<Greeting Name=\"Ana\" />`"
+      ],
+      "correct": 2,
+      "explanation": "`Name` is public, but it has no **`[Parameter]`** attribute, so the parent can't set it. Blazor throws at runtime: *Object of type 'Greeting' does not have a property matching the name 'Name'*. Being public is not enough; the attribute is what makes it a parameter."
+    },
+    {
+      "id": "B",
+      "title": "The toggle that resets",
+      "body": "Toggle.razor:\n\n```razor\n<button @onclick=\"() => IsOn = !IsOn\">@Label: @(IsOn ? \"On\" : \"Off\")</button>\n\n@code {\n    [Parameter] public string Label { get; set; } = \"\";\n    [Parameter] public bool IsOn { get; set; }\n}\n```\n\nThe page (interactive):\n\n```razor\n<Toggle Label=\"@($\"Light {clicks}\")\" IsOn=\"false\" />\n<button @onclick=\"() => clicks++\">+1</button>\n\n@code {\n    private int clicks;\n}\n```\n\nYou click the toggle once. It shows **Light 0: On**. Then you click **+1**.\n\n**What does the toggle show now?**",
+      "options": [
+        "Light 1: On",
+        "Light 1: Off",
+        "Light 0: On",
+        "An error, because a parameter was changed"
+      ],
+      "correct": 1,
+      "explanation": "**Light 1: Off.** Clicking **+1** re-renders the page. `Label` changed, so Blazor passes the toggle's parameters again, **all of them**, including `IsOn=\"false\"`. That overwrites the change the toggle made to its own parameter. A component should keep its own state in a **private field**, not in a `[Parameter]` property."
+    },
+    {
+      "id": "C",
+      "title": "Wrong name for the content",
+      "body": "Card.razor:\n\n```razor\n<div class=\"card\">\n    @Content\n</div>\n\n@code {\n    [Parameter] public RenderFragment? Content { get; set; }\n}\n```\n\nA page uses it:\n\n```razor\n<Card>\n    <p>Hello</p>\n</Card>\n```\n\n**What happens?**",
+      "options": [
+        "The card shows **Hello**",
+        "The card is empty, and **Hello** shows after it",
+        "An error: `Card` has no `ChildContent` parameter",
+        "The card is empty, with no error"
+      ],
+      "correct": 2,
+      "explanation": "Content written between a component's tags goes to a parameter named **`ChildContent`**. The name is a convention Blazor relies on. `Card` only has `Content`, so there is nowhere to put it, and Blazor reports that `Card` has no property matching `ChildContent`. Rename the parameter to `ChildContent`, or set it as `<Card><Content><p>Hello</p></Content></Card>`."
+    },
+    {
+      "id": "D",
+      "title": "A template",
+      "body": "ItemList.razor:\n\n```razor\n@typeparam TItem\n\n<ul>\n    @foreach (var item in Items)\n    {\n        <li>@ItemTemplate(item)</li>\n    }\n</ul>\n\n@code {\n    [Parameter] public IEnumerable<TItem> Items { get; set; } = [];\n    [Parameter] public RenderFragment<TItem> ItemTemplate { get; set; } = default!;\n}\n```\n\nThe page:\n\n```razor\n<ItemList Items=\"names\">\n    <ItemTemplate><b>@context.ToUpper()</b></ItemTemplate>\n</ItemList>\n\n@code {\n    private string[] names = [\"ana\", \"bo\"];\n}\n```\n\n**What does the list show?**",
+      "options": [
+        "Two items: **ANA** and **BO**",
+        "Two items: **context** and **context**",
+        "One item: **ANA, BO**",
+        "A build error: `context` is not defined"
+      ],
+      "correct": 0,
+      "explanation": "`TItem` is inferred as `string` from `Items`. For each item, `ItemList` calls `ItemTemplate(item)`, and inside the template that item is called **`context`**. So you get one `<li>` per name: **ANA** and **BO**."
+    }
+  ],
+  "practice": [
+    {
+      "id": "e1",
+      "title": "Your first component",
+      "task": "Write **`Badge.razor`**: a component (not a page) with a `string` parameter called **`Text`**, and render it as `<span class=\"badge\">...</span>`.\n\nIt will be used like this: `<Badge Text=\"New\" />`.",
+      "starter": "@* Badge.razor *@\n\n\n@code {\n\n}",
+      "solution": "@* Badge.razor *@\n<span class=\"badge\">@Text</span>\n\n@code {\n    [Parameter] public string Text { get; set; } = \"\";\n}",
+      "checks": [
+        {
+          "id": "param",
+          "label": "A `[Parameter] public string Text { get; set; }` property",
+          "pattern": "\\[Parameter\\]\\s*public\\s+string\\??\\s+Text\\s*\\{\\s*get;\\s*set;\\s*\\}",
+          "hint": "Inside `@code`, add `[Parameter] public string Text { get; set; } = \"\";`."
+        },
+        {
+          "id": "span",
+          "label": "Renders `@Text` inside `<span class=\"badge\">`",
+          "pattern": "<span\\s+class=\\\"badge\\\"\\s*>\\s*@Text\\s*</span>",
+          "hint": "Add `<span class=\"badge\">@Text</span>` above `@code`."
+        },
+        {
+          "id": "no-page",
+          "label": "No `@page` (it is a component, not a page)",
+          "pattern": "@page\\b",
+          "mustNotMatch": true,
+          "hint": "Remove `@page`: a component used as a tag has no URL."
+        }
+      ]
+    },
+    {
+      "id": "e2",
+      "title": "Make it a real parameter",
+      "task": "The page uses `<Alert Message=\"Saved\" />` and crashes. Fix `Alert.razor`:\n\n1. Make **`Message`** a parameter, and make the compiler warn when a parent forgets it.\n2. Make **`Level`** a parameter with the default value `\"info\"`.",
+      "starter": "@* Alert.razor *@\n<div class=\"alert alert-@Level\">@Message</div>\n\n@code {\n    public string Message { get; set; } = \"\";\n    public string Level { get; set; } = \"\";\n}",
+      "solution": "@* Alert.razor *@\n<div class=\"alert alert-@Level\">@Message</div>\n\n@code {\n    [Parameter, EditorRequired] public string Message { get; set; } = \"\";\n    [Parameter] public string Level { get; set; } = \"info\";\n}",
+      "checks": [
+        {
+          "id": "msg",
+          "label": "`Message` has `[Parameter]` and `[EditorRequired]`",
+          "pattern": "(\\[Parameter\\]\\s*\\[EditorRequired\\]|\\[EditorRequired\\]\\s*\\[Parameter\\]|\\[Parameter\\s*,\\s*EditorRequired\\]|\\[EditorRequired\\s*,\\s*Parameter\\])\\s*public\\s+string\\??\\s+Message\\b",
+          "hint": "Write `[Parameter, EditorRequired] public string Message { get; set; } = \"\";`."
+        },
+        {
+          "id": "lvl",
+          "label": "`Level` is a parameter",
+          "pattern": "\\[Parameter\\]\\s*public\\s+string\\??\\s+Level\\b",
+          "hint": "Add `[Parameter]` before `public string Level`."
+        },
+        {
+          "id": "default",
+          "label": "`Level` defaults to `\"info\"`",
+          "pattern": "\\bLevel\\s*\\{\\s*get;\\s*set;\\s*\\}\\s*=\\s*\\\"info\\\"\\s*;",
+          "hint": "End the `Level` property with `= \"info\";`."
+        }
+      ]
+    },
+    {
+      "id": "e3",
+      "title": "Fix the toggle that resets",
+      "task": "This toggle changes its own parameter, so it resets whenever the parent re-renders. Fix it:\n\n1. Rename the parameter to **`InitialOn`**.\n2. Keep the current state in a **private `bool` field** called **`isOn`**.\n3. Copy `InitialOn` into `isOn` in **`OnInitialized`**.\n4. The button changes `isOn`, never the parameter.",
+      "starter": "@* Toggle.razor *@\n<button @onclick=\"() => IsOn = !IsOn\">@(IsOn ? \"On\" : \"Off\")</button>\n\n@code {\n    [Parameter] public bool IsOn { get; set; }\n}",
+      "solution": "@* Toggle.razor *@\n<button @onclick=\"() => isOn = !isOn\">@(isOn ? \"On\" : \"Off\")</button>\n\n@code {\n    [Parameter] public bool InitialOn { get; set; }\n\n    private bool isOn;\n\n    protected override void OnInitialized()\n    {\n        isOn = InitialOn;\n    }\n}",
+      "checks": [
+        {
+          "id": "param",
+          "label": "A `[Parameter] public bool InitialOn` property",
+          "pattern": "\\[Parameter\\]\\s*public\\s+bool\\s+InitialOn\\b",
+          "hint": "Rename the parameter: `[Parameter] public bool InitialOn { get; set; }`."
+        },
+        {
+          "id": "field",
+          "label": "A `private bool isOn;` field",
+          "pattern": "private\\s+bool\\s+isOn\\s*(=\\s*\\w+\\s*)?;",
+          "hint": "Add `private bool isOn;` inside `@code`."
+        },
+        {
+          "id": "init",
+          "label": "`OnInitialized` copies `InitialOn` into `isOn`",
+          "pattern": "OnInitialized\\s*\\(\\s*\\)[\\s\\S]*?isOn\\s*=\\s*InitialOn\\b",
+          "hint": "Add `protected override void OnInitialized() { isOn = InitialOn; }`."
+        },
+        {
+          "id": "click",
+          "label": "Clicking flips `isOn` (`isOn = !isOn`)",
+          "pattern": "\\bisOn\\s*=\\s*!\\s*isOn\\b",
+          "hint": "Use `@onclick=\"() => isOn = !isOn\"`."
+        },
+        {
+          "id": "no-write",
+          "label": "Nothing writes to the parameter `InitialOn` except a default",
+          "pattern": "InitialOn\\s*=(?!=)",
+          "mustNotMatch": true,
+          "hint": "Only read `InitialOn`. Change `isOn` instead."
+        },
+        {
+          "id": "old",
+          "label": "The old `IsOn` parameter is gone",
+          "pattern": "\\bIsOn\\b",
+          "mustNotMatch": true,
+          "hint": "Replace every `IsOn` with `isOn` (the field) or `InitialOn` (the parameter)."
+        }
+      ]
+    },
+    {
+      "id": "e4",
+      "title": "A card with child content",
+      "task": "Make `Card.razor` render whatever the parent writes between `<Card>` and `</Card>`, below the title.\n\n```razor\n<Card Title=\"Tip\">\n    <p>Drink water.</p>\n</Card>\n```",
+      "starter": "@* Card.razor *@\n<div class=\"card\">\n    <h3>@Title</h3>\n</div>\n\n@code {\n    [Parameter] public string Title { get; set; } = \"\";\n}",
+      "solution": "@* Card.razor *@\n<div class=\"card\">\n    <h3>@Title</h3>\n    @ChildContent\n</div>\n\n@code {\n    [Parameter] public string Title { get; set; } = \"\";\n    [Parameter] public RenderFragment? ChildContent { get; set; }\n}",
+      "checks": [
+        {
+          "id": "param",
+          "label": "A `[Parameter] public RenderFragment? ChildContent` property",
+          "pattern": "\\[Parameter\\]\\s*public\\s+RenderFragment\\??\\s+ChildContent\\b",
+          "hint": "Add `[Parameter] public RenderFragment? ChildContent { get; set; }`. The name must be exactly `ChildContent`."
+        },
+        {
+          "id": "render",
+          "label": "Renders `@ChildContent` inside the card",
+          "pattern": "<div\\s+class=\\\"card\\\"\\s*>[\\s\\S]*@ChildContent\\b[\\s\\S]*</div>",
+          "hint": "Put `@ChildContent` under the `<h3>`, inside the `<div class=\"card\">`."
+        },
+        {
+          "id": "title",
+          "label": "Still renders the title",
+          "pattern": "<h3>\\s*@Title\\s*</h3>",
+          "hint": "Keep `<h3>@Title</h3>`."
+        }
+      ]
+    },
+    {
+      "id": "e5",
+      "title": "Fill the slots",
+      "task": "`Panel` has two `RenderFragment` parameters: **`Header`** and **`Body`**.\n\n```razor\n@* Panel.razor *@\n<section class=\"panel\">\n    <header>@Header</header>\n    <div>@Body</div>\n</section>\n\n@code {\n    [Parameter] public RenderFragment? Header { get; set; }\n    [Parameter] public RenderFragment? Body { get; set; }\n}\n```\n\nWrite the page **`/orders`** that uses `Panel` with `<h2>Orders</h2>` in the header and `<p>No orders yet.</p>` in the body.",
+      "starter": "@page \"/orders\"\n\n",
+      "solution": "@page \"/orders\"\n\n<Panel>\n    <Header><h2>Orders</h2></Header>\n    <Body><p>No orders yet.</p></Body>\n</Panel>",
+      "checks": [
+        {
+          "id": "page",
+          "label": "Route is `@page \"/orders\"`",
+          "pattern": "^\\s*@page\\s+\\\"/orders\\\"\\s*$",
+          "hint": "Keep `@page \"/orders\"` as the first line."
+        },
+        {
+          "id": "panel",
+          "label": "Uses `<Panel>...</Panel>`",
+          "pattern": "<Panel\\s*>[\\s\\S]*</Panel>",
+          "hint": "Wrap everything in `<Panel>` and `</Panel>`."
+        },
+        {
+          "id": "header",
+          "label": "`<Header>` holds `<h2>Orders</h2>`",
+          "pattern": "<Header>\\s*<h2>\\s*Orders\\s*</h2>\\s*</Header>",
+          "hint": "Write `<Header><h2>Orders</h2></Header>` inside the panel."
+        },
+        {
+          "id": "body",
+          "label": "`<Body>` holds `<p>No orders yet.</p>`",
+          "pattern": "<Body>\\s*<p>\\s*No orders yet\\.\\s*</p>\\s*</Body>",
+          "hint": "Write `<Body><p>No orders yet.</p></Body>` inside the panel."
+        },
+        {
+          "id": "attr",
+          "label": "The slots are child elements, not attributes",
+          "pattern": "<Panel[^>]*\\b(Header|Body)\\s*=",
+          "mustNotMatch": true,
+          "hint": "A `RenderFragment` is markup: set it with `<Header>...</Header>`, not `Header=\"...\"`."
+        }
+      ]
+    },
+    {
+      "id": "e6",
+      "title": "A generic list, from scratch",
+      "task": "Write **`ItemList.razor`**, a generic component:\n\n- A type parameter **`TItem`**.\n- A parameter **`Items`** of type `IEnumerable<TItem>`.\n- A parameter **`ItemTemplate`** of type `RenderFragment<TItem>`.\n- It renders a `<ul>` with one `<li>` per item, using the template.\n\nIt will be used like this:\n\n```razor\n<ItemList Items=\"products\">\n    <ItemTemplate>@context.Name</ItemTemplate>\n</ItemList>\n```",
+      "starter": "@* ItemList.razor *@\n\n",
+      "solution": "@* ItemList.razor *@\n@typeparam TItem\n\n<ul>\n    @foreach (var item in Items)\n    {\n        <li>@ItemTemplate(item)</li>\n    }\n</ul>\n\n@code {\n    [Parameter, EditorRequired] public IEnumerable<TItem> Items { get; set; } = [];\n    [Parameter, EditorRequired] public RenderFragment<TItem> ItemTemplate { get; set; } = default!;\n}",
+      "checks": [
+        {
+          "id": "tp",
+          "label": "`@typeparam TItem`",
+          "pattern": "^\\s*@typeparam\\s+TItem\\s*$",
+          "hint": "Start with `@typeparam TItem`."
+        },
+        {
+          "id": "items",
+          "label": "A parameter `IEnumerable<TItem> Items`",
+          "pattern": "\\[Parameter[^\\]]*\\](\\s*\\[[^\\]]*\\])?\\s*public\\s+IEnumerable<TItem>\\??\\s+Items\\b",
+          "hint": "Add `[Parameter] public IEnumerable<TItem> Items { get; set; } = [];`."
+        },
+        {
+          "id": "tmpl",
+          "label": "A parameter `RenderFragment<TItem> ItemTemplate`",
+          "pattern": "\\[Parameter[^\\]]*\\](\\s*\\[[^\\]]*\\])?\\s*public\\s+RenderFragment<TItem>\\??\\s+ItemTemplate\\b",
+          "hint": "Add `[Parameter] public RenderFragment<TItem> ItemTemplate { get; set; } = default!;`."
+        },
+        {
+          "id": "loop",
+          "label": "Loops over `Items` with `@foreach`",
+          "pattern": "@foreach\\s*\\(\\s*var\\s+(\\w+)\\s+in\\s+Items\\s*\\)",
+          "hint": "Use `@foreach (var item in Items) { ... }` inside the `<ul>`."
+        },
+        {
+          "id": "call",
+          "label": "Renders `<li>@ItemTemplate(item)</li>`",
+          "pattern": "<li>\\s*@ItemTemplate\\s*\\(\\s*\\w+\\s*\\)\\s*</li>",
+          "hint": "Call the template with the item: `<li>@ItemTemplate(item)</li>`."
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "q1",
+      "body": "An AI tool created `Components/Shared/UserCard.razor`. What is the C# class it compiles to?",
+      "options": [
+        "`UserCardComponent`",
+        "`UserCard`, in a namespace based on the folder (like `MyApp.Components.Shared`)",
+        "`Shared_UserCard`",
+        "There is no class: `.razor` files are templates, not C#"
+      ],
+      "correct": 1,
+      "explanation": "A `.razor` file compiles to a (partial) **class with the same name as the file**. The namespace comes from the project and folder, unless `@namespace` changes it."
+    },
+    {
+      "id": "q2",
+      "body": "What does `[EditorRequired]` do on a parameter?",
+      "options": [
+        "The app throws if the parent doesn't set it",
+        "The compiler shows a **warning** if a parent doesn't set it",
+        "It makes the parameter non-nullable",
+        "It hides the parameter from IntelliSense"
+      ],
+      "correct": 1,
+      "explanation": "`[EditorRequired]` is a **build-time warning** (`RZ2012`) for a missing parameter. At runtime nothing checks it, so still give it a safe default or check for `null`."
+    },
+    {
+      "id": "q3",
+      "body": "A parent passes `Title=\"@title\"` to a child. Later `title` changes and the parent re-renders. What happens to the child's `Title`?",
+      "options": [
+        "Nothing: parameters are only set once, when the child is created",
+        "The parent sets the child's parameters again, so `Title` gets the parent's current value",
+        "The child must call `StateHasChanged()` to get the new value",
+        "The child is destroyed and created again"
+      ],
+      "correct": 1,
+      "explanation": "Each time the parent renders, Blazor passes the parameters again (`SetParametersAsync`). The child keeps its instance, but its parameters are **overwritten** with the parent's values. This is why a child should not change its own parameters."
+    },
+    {
+      "id": "q4",
+      "body": "You use `<PriceTag Value=\"9.99\" />` in a page, but on screen nothing appears and the HTML contains a `<pricetag>` element. What is the most likely cause?",
+      "options": [
+        "`Value` should be a string",
+        "The page has no `@rendermode`",
+        "The `PriceTag` namespace is not imported (`@using` is missing), so it is treated as a plain HTML element",
+        "`PriceTag` has no `@page` directive"
+      ],
+      "correct": 2,
+      "explanation": "If the compiler can't find a component with that name, it renders the tag as an HTML element and shows only a **warning** (`RZ10012`). Add `@using` for its namespace, in the file or in `_Imports.razor`."
+    },
+    {
+      "id": "q5",
+      "body": "`Panel` has two `RenderFragment` parameters: `Header` and `Body`. Which usage is correct?",
+      "options": [
+        "`<Panel Header=\"<h2>Orders</h2>\" Body=\"<p>None</p>\" />`",
+        "`<Panel><h2>Orders</h2><p>None</p></Panel>`",
+        "`<Panel><Header><h2>Orders</h2></Header><Body><p>None</p></Body></Panel>`",
+        "`<Panel @Header=\"Orders\" @Body=\"None\" />`"
+      ],
+      "correct": 2,
+      "explanation": "Set each `RenderFragment` with a **child element named after the parameter**. A string attribute is not markup, and loose content would go to `ChildContent`, which `Panel` doesn't have."
+    },
+    {
+      "id": "q6",
+      "body": "Inside `<ItemTemplate>...</ItemTemplate>` of a `RenderFragment<Product>`, what is `context`?",
+      "options": [
+        "The `HttpContext` of the request",
+        "The parent component",
+        "The current `Product` passed to the template",
+        "The `RenderTreeBuilder`"
+      ],
+      "correct": 2,
+      "explanation": "For a `RenderFragment<T>`, `context` is the **value of type `T`** the component passes when it calls the template. Rename it with `Context=\"product\"` on the template element."
+    },
+    {
+      "id": "q7",
+      "body": "What does `[Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? Extra { get; set; }` do?",
+      "options": [
+        "It collects every attribute the parent sets that doesn't match another parameter",
+        "It stores the values of all other parameters, for debugging",
+        "It lets the parent set any C# property of the component",
+        "It caches parameter values between renders"
+      ],
+      "correct": 0,
+      "explanation": "Attributes that don't match a parameter (like `class`, `placeholder`, `aria-label`) go into this dictionary. Then `@attributes=\"Extra\"` puts them on an element. This is **attribute splatting**."
+    },
+    {
+      "id": "q8",
+      "body": "A component renders `<input class=\"base\" @attributes=\"Extra\" />`. The parent passes `class=\"big\"`, which is captured in `Extra`. What is the input's class?",
+      "options": [
+        "`base`",
+        "`big`",
+        "`base big`",
+        "An error: `class` is set twice"
+      ],
+      "correct": 1,
+      "explanation": "Attributes are applied **left to right, and the last one wins**. `@attributes` comes after `class=\"base\"`, so the captured `class=\"big\"` wins. To make the component's value win, write `class` **after** `@attributes`."
+    },
+    {
+      "id": "q9",
+      "body": "You move a component's `@code` into `Alert.razor.cs`. What must the C# file contain?",
+      "options": [
+        "`public class Alert : ComponentBase` in any namespace",
+        "`public partial class Alert`, in the **same namespace** as `Alert.razor`",
+        "`public class AlertCode`, and `@inherits AlertCode` in the `.razor` file is optional",
+        "A `[Component]` attribute on the class"
+      ],
+      "correct": 1,
+      "explanation": "The `.razor` file compiles to a **partial class**, so the code-behind is the other half: `partial`, same class name, same namespace. (`@inherits` with a base class is another, older pattern.)"
+    },
+    {
+      "id": "q10",
+      "body": "`Greeting` has `[Parameter] public string Name { get; set; }`. The page writes `<Greeting Name=\"user.Name\" />`. What does it show?",
+      "options": [
+        "The value of `user.Name`",
+        "The text **user.Name**",
+        "A build error",
+        "Nothing"
+      ],
+      "correct": 1,
+      "explanation": "For a **string** parameter, the attribute value is plain text, so you get the literal text `user.Name`. Write `Name=\"@user.Name\"` to pass the C# value. (For non-string parameters like `int`, the value is already treated as C#.)"
+    }
+  ],
+  "quizPassPercent": 80,
+  "interview": [
+    {
+      "id": "i1",
+      "question": "What is a Razor component?",
+      "modelAnswer": "A reusable piece of UI in a `.razor` file: markup plus C# in an `@code` block. It compiles to a C# class named after the file. You use it like an HTML tag, and with `@page` it also becomes a routable page."
+    },
+    {
+      "id": "i2",
+      "question": "How does a parent pass data to a child component?",
+      "modelAnswer": "Through parameters: public properties marked `[Parameter]`, set as attributes on the child's tag. Data flows one way, parent to child, and is passed again every time the parent re-renders."
+    },
+    {
+      "id": "i3",
+      "question": "What does `[EditorRequired]` do?",
+      "modelAnswer": "It makes the compiler warn when a parent doesn't set that parameter. It's only a build-time warning: nothing enforces it at runtime, so the component should still handle a missing value."
+    },
+    {
+      "id": "i4",
+      "question": "Why shouldn't a component change its own `[Parameter]` properties?",
+      "modelAnswer": "Because the parent overwrites them the next time it re-renders, so the change is lost and the UI 'resets'. Keep internal state in a private field (initialized from the parameter), or ask the parent to change the value through an `EventCallback`."
+    },
+    {
+      "id": "i5",
+      "question": "What is `RenderFragment`, and what is `ChildContent`?",
+      "modelAnswer": "A `RenderFragment` is a piece of UI passed as a value, so a component can render markup supplied by its parent. A `RenderFragment` parameter named `ChildContent` receives whatever the parent writes between the component's opening and closing tags."
+    },
+    {
+      "id": "i6",
+      "question": "What is a templated component?",
+      "modelAnswer": "A component that takes `RenderFragment<T>` parameters, so the parent decides how each item is rendered. It is often generic with `@typeparam`. Inside the template, the item is available as `context`. Grids and lists are typical examples."
+    },
+    {
+      "id": "i7",
+      "question": "What is attribute splatting?",
+      "modelAnswer": "Capturing attributes that don't match any parameter with `[Parameter(CaptureUnmatchedValues = true)]` into a dictionary, then applying them to an element with `@attributes`. It lets a wrapper component accept `class`, `id`, `aria-*` and so on. The last attribute written wins."
+    },
+    {
+      "id": "i8",
+      "question": "How do you split a component's markup and C# into two files?",
+      "modelAnswer": "Put the C# in `Name.razor.cs` as `public partial class Name` in the same namespace. The `.razor` file compiles to the other half of the partial class. Services are injected with `[Inject]` properties instead of `@inject`."
+    }
+  ]
+}

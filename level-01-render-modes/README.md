@@ -9,19 +9,19 @@ Content: [`src/LearnBlazor/wwwroot/content/level-01-render-modes/`](../src/Learn
 
 1. **Theory:** static SSR, Interactive Server, Interactive WebAssembly, Interactive Auto, and prerendering.
 2. **Predict (4 questions):** pick what each snippet does: no render mode, `InteractiveServer`, the double `OnInitialized`, and the WebAssembly console.
-3. **Practice (5 exercises, written in a textbox):**
+3. **Quiz (10 questions):** what you would see in dev tools, `RendererInfo` values, the `.Client` project, Auto mode, and the global render mode.
+4. **Practice (5 exercises, written in a textbox):**
    1. A static page with `RendererInfo`
    2. Make a counter interactive on the server
    3. Run it in the browser (WebAssembly)
    4. Stop the double run (`prerender: false`)
    5. The `/modes` page, from scratch
-4. **Quiz (10 questions):** what you would see in dev tools, `RendererInfo` values, the `.Client` project, Auto mode, and the global render mode.
 5. **Interview (8 questions):** answer aloud first, then in writing.
 
 ## Pass
 
-- All 5 exercises pass every check.
 - The quiz is fully answered with at least 80% correct.
+- All 5 exercises pass every check.
 
 ## Method check (the method works if 3 of 4 are true)
 
