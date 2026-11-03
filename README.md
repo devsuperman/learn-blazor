@@ -9,8 +9,8 @@ The full method lives in the study plan: [Blazor 10 Study Method: Prototype (Lev
 
 Study in the browser at **https://devsuperman.github.io/learn-blazor/**.
 
-Pick a level in the menu. Each level has one tab per step of the study loop: Theory, Predict, Practice, Challenge, Note and Interview. The site includes timers, and your answers are saved in your browser (you can download them as Markdown).
-The exercises themselves (practice and challenge code) are yours to write and run on your machine.
+Pick a level in the menu. Each level has one tab per step of the study loop: Theory, Predict, Practice, Quiz and Interview.
+You write the practice code in a textbox on the site, so no local project is needed. Your answers and code are saved in your browser.
 
 The site is a standalone Blazor WebAssembly app in [`src/LearnBlazor/`](src/LearnBlazor/). It deploys to GitHub Pages on every push to `main` (see [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml)).
 
@@ -18,7 +18,9 @@ The site is a standalone Blazor WebAssembly app in [`src/LearnBlazor/`](src/Lear
 
 1. Create `src/LearnBlazor/wwwroot/content/<level-id>/` with:
    - `theory.md`: the reading, in Markdown.
-   - `lesson.json`: predict snippets, practice steps, challenge, rubric and interview questions. Copy the Level 1 file and follow its shape.
+   - `lesson.json`: predict questions, practice exercises, quiz and interview questions. Copy the Level 1 file and follow its shape:
+     - `predict` and `quiz` items are multiple choice: `body`, `options`, `correct` (0-based index) and `explanation`.
+     - `practice` items have a `task`, `starter` and `solution` code, and `checks`. Each check is a .NET regex (`pattern`) that must match, or must not match when `mustNotMatch` is `true`.
 2. In `src/LearnBlazor/wwwroot/content/topics.json`, set `"available": true` for that level.
 
 ## Status
@@ -28,38 +30,33 @@ The site is a standalone Blazor WebAssembly app in [`src/LearnBlazor/`](src/Lear
 | 1 | Render modes | [`level-01-render-modes/`](level-01-render-modes/) | Not started |
 | 2-10 | On hold until Level 1 validates the method | - | Blocked |
 
-## The study loop (60-90 min per level)
+## The study loop
 
-1. **Theory (15 min):** read about one concept only, then close the tab.
-2. **Predict (5 min):** read a short example and write what it will do, before running it.
-3. **Practice (30 min):** write code that uses the concept. No copy-paste; docs are allowed.
-4. **Challenge (15 min):** solve a small problem from scratch, without the theory open.
-5. **Note (5 min):** 3 lines: what it is, how it differs from what you know, one gotcha.
+1. **Theory:** read about one concept only.
+2. **Predict:** read short snippets and pick what each one does. Your first pick counts.
+3. **Practice:** write code in the textbox and press **Check**. Type it yourself; the solution unlocks after your first check.
+4. **Quiz:** multiple-choice questions, without the theory open.
+5. **Interview:** answer each question aloud (under 30 s), then in writing.
+
+A level is **passed** when every practice exercise passes all its checks and the quiz is fully answered with at least 80% correct.
 
 Rules:
 
-- Advance only after passing the challenge without help. Otherwise repeat the level with a new exercise.
-- The timer ends each block, not your mood.
-- From Level 3 on, start each session with a 5-minute review challenge from 2 levels back.
-- Code copied from AI does not count as a Pass.
+- Advance only after passing the level. If the quiz is below 80%, re-read the theory and retake it.
+- From Level 3 on, start each session by redoing a practice exercise from 2 levels back.
+- Code copied from AI does not count as a pass.
 
 ## Repo layout
 
 ```
-level-XX-<topic>/
-  README.md   # the lab steps for this level
-  notes.md    # predictions, challenge answers, 3-line note, interview answers
-  code/       # your own code: practice app + challenge
-_template/    # copy this to start a new level
-```
-
-Start a new level:
-
-```bash
-cp -r _template level-02-components
+src/LearnBlazor/                    # the study site (Blazor WebAssembly)
+  wwwroot/content/<level-id>/       # theory.md + lesson.json for each level
+level-XX-<topic>/README.md          # overview of each level
+_template/                          # copy this to start a new level overview
 ```
 
 ## Requirements
 
+Only to work on the site itself:
+
 - .NET 10 SDK (`dotnet --version` should print 10.x)
-- Any IDE (Visual Studio, VS Code with C# Dev Kit, or Rider)

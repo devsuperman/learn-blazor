@@ -1,65 +1,31 @@
 # Level 1: Render modes
 
-About 60-90 minutes in total. Theory and the snippets are in the [study plan](https://claude.ai/artifact/XZTfZpeBAWV74AXrmBiFP8).
-Fill in [`notes.md`](notes.md) as you go.
+Study this level on the site: **https://devsuperman.github.io/learn-blazor/topic/level-01-render-modes**.
+Everything happens in the browser. You don't need a local project.
 
-## Checklist
+Content: [`src/LearnBlazor/wwwroot/content/level-01-render-modes/`](../src/LearnBlazor/wwwroot/content/level-01-render-modes/) (`theory.md` and `lesson.json`).
 
-### Theory (15 min)
+## Steps
 
-- [ ] Read the render modes section of the study plan (or the official .NET 10 Blazor docs), then close it.
+1. **Theory:** static SSR, Interactive Server, Interactive WebAssembly, Interactive Auto, and prerendering.
+2. **Predict (4 questions):** pick what each snippet does: no render mode, `InteractiveServer`, the double `OnInitialized`, and the WebAssembly console.
+3. **Practice (5 exercises, written in a textbox):**
+   1. A static page with `RendererInfo`
+   2. Make a counter interactive on the server
+   3. Run it in the browser (WebAssembly)
+   4. Stop the double run (`prerender: false`)
+   5. The `/modes` page, from scratch
+4. **Quiz (10 questions):** what you would see in dev tools, `RendererInfo` values, the `.Client` project, Auto mode, and the global render mode.
+5. **Interview (8 questions):** answer aloud first, then in writing.
 
-### Predict (5 min)
+## Pass
 
-- [ ] Write your predictions for snippets A, B and C in `notes.md` **before** running anything.
+- All 5 exercises pass every check.
+- The quiz is fully answered with at least 80% correct.
 
-### Practice (30 min)
+## Method check (the method works if 3 of 4 are true)
 
-- [ ] Create the app in `code/`:
-
-  ```bash
-  cd code && dotnet new blazor -n RenderModesLab -int Auto
-  ```
-
-  If the options differ, check `dotnet new blazor --help`.
-- [ ] Add four pages, each with a counter button and a line showing `RendererInfo.Name` and `RendererInfo.IsInteractive`:
-  - `/static`: no render mode
-  - `/server`: `InteractiveServer`
-  - `/wasm`: `InteractiveWebAssembly` (in the `.Client` project)
-  - `/auto`: `InteractiveAuto` (in the `.Client` project)
-- [ ] Run the app. Record whether the count changes on each page.
-- [ ] Dev tools: find the WebSocket on `/server`, the `.wasm` downloads on `/wasm`, and the complete HTML in View Source on `/static`.
-- [ ] On `/server`, add `Console.WriteLine` in `OnInitialized`. Count the lines after one page load.
-- [ ] Disable prerendering with `@rendermode @(new InteractiveServerRenderMode(prerender: false))`. Count again.
-
-### Challenge (15 min, from scratch)
-
-- [ ] Close the theory. Build a `/modes` page with `InteractiveServer` that shows the render mode name, whether it is interactive, a click counter, and the time of the last click.
-- [ ] Answer the 3 challenge questions in `notes.md`, in your own words and without AI.
-
-### Note (5 min)
-
-- [ ] Write the 3-line note in `notes.md`.
-
-### Review
-
-- [ ] Paste your `/modes` code and the 3 answers into a chat, saying "Level 1". It must work locally with `dotnet run` first.
-- [ ] Answer the follow-up question.
-- [ ] Answer the 8 interview questions aloud (under 30 s each), then in `notes.md`.
-
-## Rubric (Pass only if all 5 are met)
-
-| # | Criterion | Pass looks like |
-| --- | --- | --- |
-| 1 | Render mode | `@rendermode InteractiveServer` is on the `/modes` page |
-| 2 | Mode info | The page shows `RendererInfo.Name` and `RendererInfo.IsInteractive` |
-| 3 | Counter | `@onclick` increments the count, with no needless `StateHasChanged` |
-| 4 | Last click time | A field stores the time and the page displays it |
-| 5 | Written answers | Q1: static = HTML only, no circuit. Q2: runs in the browser after runtime + assemblies download. Q3: prerender on the server, then again when interactive |
-
-## Validation (method passes if 3 of 4 are true)
-
-- [ ] The whole level fit in 60-90 minutes.
-- [ ] I passed the challenge without help in at most 2 attempts.
+- [ ] I passed every exercise without looking at the solution first.
+- [ ] I scored at least 80% on my first quiz attempt.
 - [ ] I can name the render mode in an AI-generated file and explain why it was chosen.
 - [ ] I answered at least 6 of 8 interview questions in under 30 seconds.
