@@ -28,7 +28,8 @@ The site is a standalone Blazor WebAssembly app in [`src/LearnBlazor/`](src/Lear
 | Level | Topic | Folder | Status |
 | --- | --- | --- | --- |
 | 1 | Render modes | [`level-01-render-modes/`](level-01-render-modes/) | Not started |
-| 2-10 | On hold until Level 1 validates the method | - | Blocked |
+| 2 | Components and parameters | [`level-02-components/`](level-02-components/) | Not started |
+| 3-10 | On hold until Level 2 is passed | - | Blocked |
 
 ## The study loop
 

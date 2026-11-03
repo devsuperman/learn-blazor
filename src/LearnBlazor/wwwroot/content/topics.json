@@ -1,6 +1,6 @@
 [
   { "id": "level-01-render-modes", "number": 1, "title": "Render modes", "summary": "Static SSR, Interactive Server, WebAssembly, Auto, and prerendering.", "available": true },
-  { "id": "level-02-components", "number": 2, "title": "Components and parameters", "summary": "Razor components, [Parameter], child content, and composition.", "available": false },
+  { "id": "level-02-components", "number": 2, "title": "Components and parameters", "summary": "Razor components, [Parameter], child content, and templates.", "available": true },
   { "id": "level-03-binding-events", "number": 3, "title": "Data binding and events", "summary": "@bind, @onclick, EventCallback, and when the UI re-renders.", "available": false },
   { "id": "level-04-lifecycle", "number": 4, "title": "Component lifecycle", "summary": "OnInitialized, OnParametersSet, OnAfterRender, and Dispose.", "available": false },
   { "id": "level-05-routing", "number": 5, "title": "Routing and navigation", "summary": "@page, route parameters, NavigationManager, and NavLink.", "available": false },
