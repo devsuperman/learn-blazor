@@ -1,0 +1,136 @@
+@page "/topic/{Id}"
+@inject ContentService Content
+@inject ProgressService Progress
+@inject NavigationManager Nav
+
+@if (_loading)
+{
+    <p>Loading…</p>
+}
+else if (_lesson is null || _progress is null)
+{
+    <PageTitle>Not found · Learn Blazor</PageTitle>
+    <h1>Level not found</h1>
+    <p>This level does not exist or is not available yet. <a href="">Back to the overview</a>.</p>
+}
+else
+{
+    <PageTitle>@_lesson.Title · Learn Blazor</PageTitle>
+
+    <header class="topic-header">
+        <div>
+            <div class="eyebrow">Level @_lesson.Number</div>
+            <h1>@_lesson.Title</h1>
+            <p class="lead">@_lesson.Summary</p>
+        </div>
+        <StatusBadge Status="@_progress.Status" ShowText="true" />
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Study steps">
+        @foreach (var tab in Tabs)
+        {
+            <a role="tab" class="tab @(tab.Key == CurrentTab ? "active" : "")"
+               aria-selected="@(tab.Key == CurrentTab)"
+               href="@TabUrl(tab.Key)">
+                @tab.Label
+                @if (tab.Key == "theory" && _progress.TheoryLocked)
+                {
+                    <span aria-label="locked"> 🔒</span>
+                }
+            </a>
+        }
+    </nav>
+
+    @if (TabMinutes(CurrentTab) is int minutes)
+    {
+        <StudyTimer @key="@($"{Id}:{CurrentTab}")" Minutes="minutes" Label="@($"{CurrentLabel} block")" />
+    }
+
+    <section class="tab-panel" role="tabpanel">
+        @switch (CurrentTab)
+        {
+            case "theory":
+                <TheoryTab Theory="@_theory" Progress="_progress" ChallengeUrl="@TabUrl("challenge")" />
+                break;
+            case "predict":
+                <PredictTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
+                break;
+            case "practice":
+                <PracticeTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
+                break;
+            case "challenge":
+                <ChallengeTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
+                break;
+            case "interview":
+                <InterviewTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" />
+                break;
+            case "notes":
+                <NotesTab Lesson="_lesson" Progress="_progress" OnChange="SaveAsync" OnReset="ResetAsync" />
+                break;
+        }
+    </section>
+
+    @if (NextTab is { } next)
+    {
+        <div class="next">
+            <a class="btn btn-primary" href="@TabUrl(next.Key)">Next: @next.Label →</a>
+        </div>
+    }
+}
+
+@code {
+    private static readonly (string Key, string Label, int? Minutes)[] Tabs =
+    [
+        ("theory", "1 · Theory", 15),
+        ("predict", "2 · Predict", 5),
+        ("practice", "3 · Practice", 30),
+        ("challenge", "4 · Challenge", null), // the challenge tab runs its own timer
+        ("notes", "5 · Note", 5),
+        ("interview", "Interview", null),
+    ];
+
+    private Lesson? _lesson;
+    private string _theory = "";
+    private LessonProgress? _progress;
+    private bool _loading = true;
+
+    [Parameter] public string Id { get; set; } = "";
+    [SupplyParameterFromQuery] public string? Tab { get; set; }
+
+    private string CurrentTab => Tabs.Any(t => t.Key == Tab) ? Tab! : "theory";
+    private string CurrentLabel => Tabs.First(t => t.Key == CurrentTab).Label.Split(" · ").Last();
+
+    private (string Key, string Label)? NextTab
+    {
+        get
+        {
+            var i = Array.FindIndex(Tabs, t => t.Key == CurrentTab);
+            return i + 1 < Tabs.Length ? (Tabs[i + 1].Key, Tabs[i + 1].Label) : null;
+        }
+    }
+
+    private static int? TabMinutes(string key) => Tabs.First(t => t.Key == key).Minutes;
+
+    private string TabUrl(string key) => $"topic/{Id}?tab={key}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lesson?.Id == Id) return;
+
+        _loading = true;
+        var loaded = await Content.GetLessonAsync(Id);
+        _lesson = loaded?.Lesson;
+        _theory = loaded?.Theory ?? "";
+        _progress = loaded is null ? null : await Progress.GetAsync(Id);
+        _loading = false;
+    }
+
+    private Task SaveAsync() => Progress.SaveAsync(Id, _progress!);
+
+    private async Task ResetAsync()
+    {
+        await Progress.ResetAsync(Id);
+        _progress = await Progress.GetAsync(Id);
+        Nav.NavigateTo(TabUrl("theory"));
+    }
+}

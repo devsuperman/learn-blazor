@@ -1,0 +1,20 @@
+<span class="badge badge-@Status.ToString().ToLowerInvariant()" title="@Text">@Icon@if (!ShowText) {<span class="sr-only">@Text</span>}</span>
+
+@code {
+    [Parameter] public TopicStatus Status { get; set; }
+    [Parameter] public bool ShowText { get; set; }
+
+    private string Text => Status switch
+    {
+        TopicStatus.Passed => "Passed",
+        TopicStatus.InProgress => "In progress",
+        _ => "Not started",
+    };
+
+    private string Icon => ShowText ? Text : Status switch
+    {
+        TopicStatus.Passed => "✓",
+        TopicStatus.InProgress => "●",
+        _ => "○",
+    };
+}

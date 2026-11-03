@@ -1,0 +1,48 @@
+<p class="muted">
+    Do these steps on your own machine (.NET 10 SDK + any IDE). Type the code yourself: no copy-paste.
+    Tick each step when it is done.
+</p>
+
+<div class="progress-line">
+    <div class="progress-bar"><div style="width:@Percent%"></div></div>
+    <span>@Done / @Lesson.Practice.Count done</span>
+</div>
+
+<ol class="steps">
+    @foreach (var step in Lesson.Practice)
+    {
+        var done = Progress.PracticeDone.Contains(step.Id);
+        <li class="step @(done ? "step-done" : "")">
+            <label class="check">
+                <input type="checkbox" checked="@done" @onchange="e => Toggle(step.Id, (bool)e.Value!)" />
+                <span class="sr-only">Mark step done</span>
+            </label>
+            <div class="step-body">
+                <Markdown Text="@step.Text" />
+                @if (!string.IsNullOrWhiteSpace(step.Hint))
+                {
+                    <details class="hint">
+                        <summary>Hint</summary>
+                        <Markdown Text="@step.Hint" />
+                    </details>
+                }
+            </div>
+        </li>
+    }
+</ol>
+
+@code {
+    [Parameter, EditorRequired] public Lesson Lesson { get; set; } = default!;
+    [Parameter, EditorRequired] public LessonProgress Progress { get; set; } = default!;
+    [Parameter] public EventCallback OnChange { get; set; }
+
+    private int Done => Lesson.Practice.Count(s => Progress.PracticeDone.Contains(s.Id));
+    private int Percent => Lesson.Practice.Count == 0 ? 0 : Done * 100 / Lesson.Practice.Count;
+
+    private Task Toggle(string id, bool done)
+    {
+        if (done) Progress.PracticeDone.Add(id);
+        else Progress.PracticeDone.Remove(id);
+        return OnChange.InvokeAsync();
+    }
+}

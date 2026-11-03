@@ -1,0 +1,87 @@
+@page "/"
+@inject ContentService Content
+@inject ProgressService Progress
+
+<PageTitle>Learn Blazor</PageTitle>
+
+<h1>Learn Blazor (.NET 10)</h1>
+<p class="lead">
+    One level at a time. The goal: read AI-generated Blazor code with confidence and answer basic interview questions.
+</p>
+
+<section class="card">
+    <h2>Levels</h2>
+    @if (_topics is null)
+    {
+        <p>Loading…</p>
+    }
+    else
+    {
+        <ul class="level-list">
+            @foreach (var topic in _topics)
+            {
+                <li class="level-item @(topic.Available ? "" : "level-locked")">
+                    <span class="level-num">@topic.Number</span>
+                    <div class="level-body">
+                        @if (topic.Available)
+                        {
+                            <a href="@($"topic/{topic.Id}")" class="level-title">@topic.Title</a>
+                        }
+                        else
+                        {
+                            <span class="level-title">@topic.Title</span>
+                        }
+                        <span class="level-summary">@topic.Summary</span>
+                    </div>
+                    @if (topic.Available)
+                    {
+                        <StatusBadge Status="@(_status.GetValueOrDefault(topic.Id))" ShowText="true" />
+                    }
+                    else
+                    {
+                        <span class="badge badge-soon">Coming soon</span>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+<section class="card">
+    <h2>The study loop (60-90 min per level)</h2>
+    <p>Each level page has one tab per step. Work through them in order.</p>
+    <ol class="loop">
+        <li><strong>Theory (15 min):</strong> read about one concept only.</li>
+        <li><strong>Predict (5 min):</strong> read short snippets and write what they will do <em>before</em> running them.</li>
+        <li><strong>Practice (30 min):</strong> write code that uses the concept in your IDE. No copy-paste; docs are allowed.</li>
+        <li><strong>Challenge (15 min):</strong> solve a small problem from scratch. Starting it locks the theory tab.</li>
+        <li><strong>Note (5 min):</strong> 3 lines: what it is, how it differs from what you know, one gotcha.</li>
+    </ol>
+    <p>Then answer the <strong>interview</strong> questions aloud (under 30 s each) and in writing.</p>
+</section>
+
+<section class="card">
+    <h2>Rules</h2>
+    <ul>
+        <li>Advance only after passing the challenge without help. Otherwise repeat the level with a new exercise.</li>
+        <li>The timer ends each block, not your mood.</li>
+        <li>From Level 3 on, start each session with a 5-minute review challenge from 2 levels back.</li>
+        <li>Code copied from AI does not count as a pass.</li>
+    </ul>
+    <p class="muted">
+        You write and run the exercise code on your own machine with the .NET 10 SDK and any IDE.
+        This site holds the theory, the steps, and your answers. Your answers are saved only in this browser.
+    </p>
+</section>
+
+@code {
+    private IReadOnlyList<TopicSummary>? _topics;
+    private readonly Dictionary<string, TopicStatus> _status = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _topics = await Content.GetTopicsAsync();
+        foreach (var topic in _topics.Where(t => t.Available))
+            _status[topic.Id] = (await Progress.GetAsync(topic.Id)).Status;
+    }
+}

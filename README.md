@@ -5,6 +5,22 @@ A playground to learn Blazor (.NET 10), one level at a time.
 The goal: read AI-generated Blazor code with confidence and answer basic interview questions.
 The full method lives in the study plan: [Blazor 10 Study Method: Prototype (Level 1)](https://claude.ai/artifact/XZTfZpeBAWV74AXrmBiFP8).
 
+## Study site
+
+Study in the browser at **https://devsuperman.github.io/learn-blazor/**.
+
+Pick a level in the menu. Each level has one tab per step of the study loop: Theory, Predict, Practice, Challenge, Note and Interview. The site includes timers, and your answers are saved in your browser (you can download them as Markdown).
+The exercises themselves (practice and challenge code) are yours to write and run on your machine.
+
+The site is a standalone Blazor WebAssembly app in [`src/LearnBlazor/`](src/LearnBlazor/). It deploys to GitHub Pages on every push to `main` (see [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml)).
+
+### Add a level to the site
+
+1. Create `src/LearnBlazor/wwwroot/content/<level-id>/` with:
+   - `theory.md`: the reading, in Markdown.
+   - `lesson.json`: predict snippets, practice steps, challenge, rubric and interview questions. Copy the Level 1 file and follow its shape.
+2. In `src/LearnBlazor/wwwroot/content/topics.json`, set `"available": true` for that level.
+
 ## Status
 
 | Level | Topic | Folder | Status |

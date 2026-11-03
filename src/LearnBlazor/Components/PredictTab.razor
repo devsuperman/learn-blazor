@@ -1,0 +1,52 @@
+<p class="muted">
+    Write what each snippet will do <strong>before</strong> running anything. Then reveal the answer and compare.
+    A wrong prediction is fine: it shows you what to look at in practice.
+</p>
+
+@foreach (var item in Lesson.Predict)
+{
+    var revealed = Progress.RevealedPredictions.Contains(item.Id);
+    var text = Progress.Predictions.GetValueOrDefault(item.Id, "");
+
+    <article class="card">
+        <h3>@item.Id · @item.Title</h3>
+        <Markdown Text="@item.Body" />
+
+        <label class="field-label" for="predict-@item.Id">My prediction</label>
+        <textarea id="predict-@item.Id" rows="3" readonly="@revealed"
+                  value="@text"
+                  @oninput="e => SetPrediction(item.Id, e.Value?.ToString())"></textarea>
+
+        @if (revealed)
+        {
+            <div class="answer">
+                <div class="answer-label">What actually happens</div>
+                <Markdown Text="@item.Answer" />
+            </div>
+        }
+        else
+        {
+            <button class="btn" disabled="@string.IsNullOrWhiteSpace(text)" @onclick="() => Reveal(item.Id)">
+                Reveal answer
+            </button>
+        }
+    </article>
+}
+
+@code {
+    [Parameter, EditorRequired] public Lesson Lesson { get; set; } = default!;
+    [Parameter, EditorRequired] public LessonProgress Progress { get; set; } = default!;
+    [Parameter] public EventCallback OnChange { get; set; }
+
+    private Task SetPrediction(string id, string? value)
+    {
+        Progress.Predictions[id] = value ?? "";
+        return OnChange.InvokeAsync();
+    }
+
+    private Task Reveal(string id)
+    {
+        Progress.RevealedPredictions.Add(id);
+        return OnChange.InvokeAsync();
+    }
+}

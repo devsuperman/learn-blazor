@@ -1,0 +1,44 @@
+<p class="muted">
+    Answer each question aloud first (under 30 seconds), then write it down. Reveal the model answer only after you wrote yours.
+</p>
+
+<p><strong>@Answered / @Lesson.Interview.Count answered.</strong></p>
+
+@foreach (var q in Lesson.Interview)
+{
+    var text = Progress.InterviewAnswers.GetValueOrDefault(q.Id, "");
+    var revealed = Progress.InterviewRevealed.Contains(q.Id);
+    <article class="card">
+        <h3>@q.Question</h3>
+        <textarea rows="3" aria-label="My answer" value="@text"
+                  @oninput="e => SetAnswer(q.Id, e.Value?.ToString())"></textarea>
+        @if (revealed)
+        {
+            <div class="answer"><span class="answer-label">Model answer</span><Markdown Text="@q.ModelAnswer" /></div>
+        }
+        else
+        {
+            <button class="btn" disabled="@string.IsNullOrWhiteSpace(text)" @onclick="() => Reveal(q.Id)">Reveal model answer</button>
+        }
+    </article>
+}
+
+@code {
+    [Parameter, EditorRequired] public Lesson Lesson { get; set; } = default!;
+    [Parameter, EditorRequired] public LessonProgress Progress { get; set; } = default!;
+    [Parameter] public EventCallback OnChange { get; set; }
+
+    private int Answered => Lesson.Interview.Count(q => !string.IsNullOrWhiteSpace(Progress.InterviewAnswers.GetValueOrDefault(q.Id)));
+
+    private Task SetAnswer(string id, string? value)
+    {
+        Progress.InterviewAnswers[id] = value ?? "";
+        return OnChange.InvokeAsync();
+    }
+
+    private Task Reveal(string id)
+    {
+        Progress.InterviewRevealed.Add(id);
+        return OnChange.InvokeAsync();
+    }
+}
