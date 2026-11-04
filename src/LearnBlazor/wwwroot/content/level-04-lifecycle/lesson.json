@@ -1,0 +1,457 @@
+{
+  "id": "level-04-lifecycle",
+  "number": 4,
+  "title": "Component lifecycle",
+  "summary": "OnInitialized, OnParametersSet, OnAfterRender, and Dispose.",
+  "predict": [
+    {
+      "id": "A",
+      "title": "The order of calls",
+      "body": "Logger.razor (interactive, no prerendering):\n\n```razor\n<p>Hi</p>\n\n@code {\n    protected override void OnAfterRender(bool firstRender)\n        => Console.WriteLine($\"after {firstRender}\");\n\n    protected override void OnParametersSet()\n        => Console.WriteLine(\"params\");\n\n    protected override void OnInitialized()\n        => Console.WriteLine(\"init\");\n}\n```\n\nThe component is shown once, and nothing else happens.\n\n**What does the console show?**",
+      "options": [
+        "`after True`, `init`, `params` (the order they are written in)",
+        "`init`, `params`, `after True`",
+        "`params`, `init`, `after True`",
+        "`init`, `after True`, `params`"
+      ],
+      "correct": 1,
+      "explanation": "The order in the file doesn't matter: Blazor always calls **`OnInitialized`**, then **`OnParametersSet`**, then renders, then calls **`OnAfterRender`** with `firstRender` set to `true`."
+    },
+    {
+      "id": "B",
+      "title": "No loading state",
+      "body": "Products.razor (interactive):\n\n```razor\n@page \"/products\"\n@inject ProductService Service\n\n<p>@products.Count products</p>\n\n@code {\n    private List<Product>? products;\n\n    protected override async Task OnInitializedAsync()\n    {\n        products = await Service.GetAllAsync(); // takes 1 second\n    }\n}\n```\n\n**What happens when you open the page?**",
+      "options": [
+        "Blazor waits 1 second, then shows the count",
+        "It shows **0 products**, then the real count after 1 second",
+        "A `NullReferenceException` on the first render",
+        "A build error, because `products` can be `null`"
+      ],
+      "correct": 2,
+      "explanation": "When `OnInitializedAsync` awaits a task that is not finished, Blazor **renders right away**. At that moment `products` is still `null`, so `products.Count` throws a **`NullReferenceException`**. (The compiler only gives a nullable warning.) Add `@if (products is null) { <p>Loading...</p> }` before using it."
+    },
+    {
+      "id": "C",
+      "title": "Prerendering",
+      "body": "Stats.razor:\n\n```razor\n@page \"/stats\"\n@rendermode InteractiveServer\n@inject ILogger<Stats> Log\n\n<p>Stats</p>\n\n@code {\n    protected override void OnInitialized()\n        => Log.LogInformation(\"Loading stats\");\n}\n```\n\nPrerendering is on (the default). You open `/stats` once.\n\n**How many times is \"Loading stats\" logged?**",
+      "options": [
+        "Once",
+        "Twice: once for the prerender, once when the page becomes interactive",
+        "Never: `OnInitialized` doesn't run with prerendering",
+        "Once per render of the page"
+      ],
+      "correct": 1,
+      "explanation": "With prerendering, the server first renders the page to HTML with **one instance**. Then the interactive circuit creates a **new instance**, and its `OnInitialized` runs again. `OnInitialized` runs once **per instance**, and there are two instances."
+    },
+    {
+      "id": "D",
+      "title": "A timer with no re-render",
+      "body": "Clock.razor (interactive):\n\n```razor\n<p>Seconds: @seconds</p>\n\n@code {\n    private int seconds;\n    private Timer? timer;\n\n    protected override void OnInitialized()\n    {\n        timer = new Timer(_ => seconds++, null, 1000, 1000);\n    }\n}\n```\n\n(`Timer` is `System.Threading.Timer`.) You wait 5 seconds and nothing else happens on the page.\n\n**What does it show?**",
+      "options": [
+        "Seconds: 5",
+        "Seconds: 0",
+        "Seconds: 1",
+        "An error, because the timer runs on another thread"
+      ],
+      "correct": 1,
+      "explanation": "The field changes, but **nothing tells Blazor to render**. Blazor re-renders automatically after lifecycle methods and UI events, not after a timer callback. The callback should call `InvokeAsync(StateHasChanged)`. Also, the timer is never disposed, so it keeps running after the component is removed."
+    }
+  ],
+  "practice": [
+    {
+      "id": "e1",
+      "title": "Add a loading state",
+      "task": "This page crashes on the first render, because `names` is `null` until the data arrives.\n\n1. Load the data in **`OnInitializedAsync`** with `names = await Service.GetNamesAsync();`.\n2. While `names` is `null`, show **`<p>Loading...</p>`**.\n3. Otherwise, show the list.",
+      "starter": "@page \"/names\"\n@inject NameService Service\n\n<ul>\n    @foreach (var name in names)\n    {\n        <li>@name</li>\n    }\n</ul>\n\n@code {\n    private List<string>? names;\n}",
+      "solution": "@page \"/names\"\n@inject NameService Service\n\n@if (names is null)\n{\n    <p>Loading...</p>\n}\nelse\n{\n    <ul>\n        @foreach (var name in names)\n        {\n            <li>@name</li>\n        }\n    </ul>\n}\n\n@code {\n    private List<string>? names;\n\n    protected override async Task OnInitializedAsync()\n    {\n        names = await Service.GetNamesAsync();\n    }\n}",
+      "hint": "Wrap the list in `@if (names is null) { <p>Loading...</p> } else { ... }`.",
+      "checks": [
+        {
+          "id": "method",
+          "label": "Overrides `protected override async Task OnInitializedAsync()`",
+          "pattern": "protected\\s+override\\s+async\\s+Task\\s+OnInitializedAsync\\s*\\(\\s*\\)",
+          "hint": "Add `protected override async Task OnInitializedAsync() { ... }` inside `@code`."
+        },
+        {
+          "id": "await",
+          "label": "Awaits `Service.GetNamesAsync()` into `names`",
+          "pattern": "names\\s*=\\s*await\\s+Service\\.GetNamesAsync\\s*\\(\\s*\\)",
+          "hint": "Write `names = await Service.GetNamesAsync();`."
+        },
+        {
+          "id": "null",
+          "label": "Checks `names` for `null` with `@if`",
+          "pattern": "@if\\s*\\(\\s*(names\\s*(is\\s+null|==\\s*null)|null\\s*==\\s*names)\\s*\\)",
+          "hint": "Add `@if (names is null)` before the list."
+        },
+        {
+          "id": "loading",
+          "label": "Shows `<p>Loading...</p>`",
+          "pattern": "<p>\\s*Loading(\\.\\.\\.|…)\\s*</p>",
+          "hint": "Inside the `@if`, write `<p>Loading...</p>`."
+        },
+        {
+          "id": "else",
+          "label": "Shows the list in an `else`",
+          "pattern": "\\belse\\s*\\{[\\s\\S]*@foreach",
+          "hint": "Put the `<ul>` with the `@foreach` in the `else { ... }` block."
+        }
+      ]
+    },
+    {
+      "id": "e2",
+      "title": "Reload when the parameter changes",
+      "task": "On `/product/1`, the user clicks a link to `/product/2`. The URL changes, but the page keeps showing product 1: Blazor reused the same instance, so `OnInitializedAsync` did not run again.\n\nMove the loading code to the method that runs **every time parameters are set**.",
+      "starter": "@page \"/product/{Id:int}\"\n@inject ProductService Service\n\n@if (product is null)\n{\n    <p>Loading...</p>\n}\nelse\n{\n    <h1>@product.Name</h1>\n}\n\n@code {\n    [Parameter] public int Id { get; set; }\n    private Product? product;\n\n    protected override async Task OnInitializedAsync()\n    {\n        product = await Service.GetAsync(Id);\n    }\n}",
+      "solution": "@page \"/product/{Id:int}\"\n@inject ProductService Service\n\n@if (product is null)\n{\n    <p>Loading...</p>\n}\nelse\n{\n    <h1>@product.Name</h1>\n}\n\n@code {\n    [Parameter] public int Id { get; set; }\n    private Product? product;\n\n    protected override async Task OnParametersSetAsync()\n    {\n        product = await Service.GetAsync(Id);\n    }\n}",
+      "hint": "Rename the method to `OnParametersSetAsync`.",
+      "checks": [
+        {
+          "id": "method",
+          "label": "Overrides `OnParametersSetAsync()`",
+          "pattern": "protected\\s+override\\s+async\\s+Task\\s+OnParametersSetAsync\\s*\\(\\s*\\)",
+          "hint": "Use `protected override async Task OnParametersSetAsync()`."
+        },
+        {
+          "id": "load",
+          "label": "Loads the product with `Id` there",
+          "pattern": "OnParametersSetAsync\\s*\\(\\s*\\)[\\s\\S]*?product\\s*=\\s*await\\s+Service\\.GetAsync\\s*\\(\\s*Id\\s*\\)",
+          "hint": "Inside `OnParametersSetAsync`, write `product = await Service.GetAsync(Id);`."
+        },
+        {
+          "id": "no-init",
+          "label": "No longer loads in `OnInitializedAsync`",
+          "pattern": "OnInitialized(Async)?\\s*\\(",
+          "mustNotMatch": true,
+          "hint": "Remove `OnInitializedAsync`: it runs only once per instance."
+        }
+      ]
+    },
+    {
+      "id": "e3",
+      "title": "JavaScript after the first render",
+      "task": "This component reads the theme from `localStorage`. It crashes during prerendering, because there is no browser yet.\n\n1. Move the JS call to **`OnAfterRenderAsync(bool firstRender)`**.\n2. Run it **only on the first render**.\n3. Call **`StateHasChanged()`** after you set `theme`, so the new value shows.",
+      "starter": "@inject IJSRuntime JS\n\n<p>Theme: @(theme ?? \"...\")</p>\n\n@code {\n    private string? theme;\n\n    protected override async Task OnInitializedAsync()\n    {\n        theme = await JS.InvokeAsync<string?>(\"localStorage.getItem\", \"theme\");\n    }\n}",
+      "solution": "@inject IJSRuntime JS\n\n<p>Theme: @(theme ?? \"...\")</p>\n\n@code {\n    private string? theme;\n\n    protected override async Task OnAfterRenderAsync(bool firstRender)\n    {\n        if (firstRender)\n        {\n            theme = await JS.InvokeAsync<string?>(\"localStorage.getItem\", \"theme\");\n            StateHasChanged();\n        }\n    }\n}",
+      "hint": "Changing a field in `OnAfterRenderAsync` doesn't render again by itself. That is why you call `StateHasChanged()`, and why it must be inside `if (firstRender)`.",
+      "checks": [
+        {
+          "id": "method",
+          "label": "Overrides `OnAfterRenderAsync(bool firstRender)`",
+          "pattern": "protected\\s+override\\s+async\\s+Task\\s+OnAfterRenderAsync\\s*\\(\\s*bool\\s+firstRender\\s*\\)",
+          "hint": "Add `protected override async Task OnAfterRenderAsync(bool firstRender)`."
+        },
+        {
+          "id": "guard",
+          "label": "Checks `if (firstRender)`",
+          "pattern": "if\\s*\\(\\s*firstRender\\s*\\)",
+          "hint": "Wrap the code in `if (firstRender) { ... }`."
+        },
+        {
+          "id": "js",
+          "label": "Calls `JS.InvokeAsync` after `firstRender` is checked",
+          "pattern": "if\\s*\\(\\s*firstRender\\s*\\)[\\s\\S]*?JS\\.InvokeAsync",
+          "hint": "Put the `JS.InvokeAsync<string?>(\"localStorage.getItem\", \"theme\")` call inside the `if`."
+        },
+        {
+          "id": "shc",
+          "label": "Calls `StateHasChanged()` after setting `theme`",
+          "pattern": "theme\\s*=\\s*await[\\s\\S]*?StateHasChanged\\s*\\(\\s*\\)",
+          "hint": "After `theme = await ...;`, add `StateHasChanged();`."
+        },
+        {
+          "id": "no-init",
+          "label": "No JS call in `OnInitializedAsync`",
+          "pattern": "OnInitialized(Async)?\\s*\\(",
+          "mustNotMatch": true,
+          "hint": "Remove `OnInitializedAsync`: JS interop is not available during prerendering."
+        }
+      ]
+    },
+    {
+      "id": "e4",
+      "title": "Unsubscribe when the component is removed",
+      "task": "`CartBadge` subscribes to `Cart.Changed`, but never unsubscribes. The cart service lives longer than the component, so it leaks.\n\n1. Implement **`IDisposable`** with `@implements`.\n2. Add **`public void Dispose()`** that unsubscribes with `-=`.\n3. In the handler, use **`InvokeAsync(StateHasChanged)`**, because the event can fire on another thread.",
+      "starter": "@inject CartService Cart\n\n<span class=\"badge\">@Cart.Count</span>\n\n@code {\n    protected override void OnInitialized()\n    {\n        Cart.Changed += OnCartChanged;\n    }\n\n    private void OnCartChanged()\n    {\n        StateHasChanged();\n    }\n}",
+      "solution": "@implements IDisposable\n@inject CartService Cart\n\n<span class=\"badge\">@Cart.Count</span>\n\n@code {\n    protected override void OnInitialized()\n    {\n        Cart.Changed += OnCartChanged;\n    }\n\n    private void OnCartChanged()\n    {\n        InvokeAsync(StateHasChanged);\n    }\n\n    public void Dispose()\n    {\n        Cart.Changed -= OnCartChanged;\n    }\n}",
+      "hint": "The first line of the file is `@implements IDisposable`.",
+      "checks": [
+        {
+          "id": "implements",
+          "label": "`@implements IDisposable`",
+          "pattern": "^\\s*@implements\\s+(System\\.)?IDisposable\\s*$",
+          "hint": "Add `@implements IDisposable` at the top of the file."
+        },
+        {
+          "id": "dispose",
+          "label": "A `public void Dispose()` method",
+          "pattern": "public\\s+void\\s+Dispose\\s*\\(\\s*\\)",
+          "hint": "Add `public void Dispose() { ... }` inside `@code`."
+        },
+        {
+          "id": "unsub",
+          "label": "`Dispose` unsubscribes with `Cart.Changed -= OnCartChanged`",
+          "pattern": "Dispose\\s*\\(\\s*\\)[\\s\\S]*?Cart\\.Changed\\s*-=\\s*OnCartChanged",
+          "hint": "Inside `Dispose`, write `Cart.Changed -= OnCartChanged;`."
+        },
+        {
+          "id": "invoke",
+          "label": "The handler uses `InvokeAsync(StateHasChanged)`",
+          "pattern": "InvokeAsync\\s*\\(\\s*(StateHasChanged|\\(\\s*\\)\\s*=>\\s*StateHasChanged\\s*\\(\\s*\\))\\s*\\)",
+          "hint": "Replace `StateHasChanged();` with `InvokeAsync(StateHasChanged);`."
+        },
+        {
+          "id": "sub",
+          "label": "Still subscribes in `OnInitialized`",
+          "pattern": "Cart\\.Changed\\s*\\+=\\s*OnCartChanged",
+          "hint": "Keep `Cart.Changed += OnCartChanged;` in `OnInitialized`."
+        }
+      ]
+    },
+    {
+      "id": "e5",
+      "title": "A clock that ticks and stops",
+      "task": "Fix this clock:\n\n1. The timer callback must make the UI update: call **`InvokeAsync(StateHasChanged)`** after `seconds++`.\n2. Implement **`IDisposable`** and **dispose the timer** in `Dispose`, so it stops when the component is removed.",
+      "starter": "@* Clock.razor *@\n<p>Seconds: @seconds</p>\n\n@code {\n    private int seconds;\n    private Timer? timer;\n\n    protected override void OnInitialized()\n    {\n        timer = new Timer(_ => seconds++, null, 1000, 1000);\n    }\n}",
+      "solution": "@* Clock.razor *@\n@implements IDisposable\n\n<p>Seconds: @seconds</p>\n\n@code {\n    private int seconds;\n    private Timer? timer;\n\n    protected override void OnInitialized()\n    {\n        timer = new Timer(_ =>\n        {\n            seconds++;\n            InvokeAsync(StateHasChanged);\n        }, null, 1000, 1000);\n    }\n\n    public void Dispose()\n    {\n        timer?.Dispose();\n    }\n}",
+      "hint": "Turn the lambda into a block: `_ => { seconds++; InvokeAsync(StateHasChanged); }`.",
+      "checks": [
+        {
+          "id": "implements",
+          "label": "`@implements IDisposable`",
+          "pattern": "^\\s*@implements\\s+(System\\.)?IDisposable\\s*$",
+          "hint": "Add `@implements IDisposable` near the top."
+        },
+        {
+          "id": "invoke",
+          "label": "The timer callback calls `InvokeAsync(StateHasChanged)`",
+          "pattern": "new\\s+Timer\\s*\\([\\s\\S]*?InvokeAsync\\s*\\(\\s*(StateHasChanged|\\(\\s*\\)\\s*=>\\s*StateHasChanged\\s*\\(\\s*\\))\\s*\\)",
+          "hint": "Inside the timer lambda, after `seconds++;`, add `InvokeAsync(StateHasChanged);`."
+        },
+        {
+          "id": "dispose",
+          "label": "`Dispose()` disposes the timer",
+          "pattern": "public\\s+void\\s+Dispose\\s*\\(\\s*\\)[\\s\\S]*?timer\\s*\\??\\s*\\.\\s*Dispose\\s*\\(\\s*\\)",
+          "hint": "Add `public void Dispose() { timer?.Dispose(); }`."
+        }
+      ]
+    },
+    {
+      "id": "e6",
+      "title": "A cancellable load, from scratch",
+      "task": "Write **`Report.razor`**, a page at **`/report`**:\n\n- Inject **`ReportService Service`**.\n- A private **`CancellationTokenSource`** field called **`cts`**.\n- A nullable `string` field **`report`**, loaded in **`OnInitializedAsync`** with `await Service.GetReportAsync(cts.Token)`.\n- Show `<p>Loading...</p>` while `report` is `null`, otherwise `<p>@report</p>`.\n- Implement **`IDisposable`**: in `Dispose`, **cancel** and **dispose** `cts`, so a slow request stops when the user leaves.",
+      "starter": "@page \"/report\"\n\n",
+      "solution": "@page \"/report\"\n@implements IDisposable\n@inject ReportService Service\n\n@if (report is null)\n{\n    <p>Loading...</p>\n}\nelse\n{\n    <p>@report</p>\n}\n\n@code {\n    private readonly CancellationTokenSource cts = new();\n    private string? report;\n\n    protected override async Task OnInitializedAsync()\n    {\n        report = await Service.GetReportAsync(cts.Token);\n    }\n\n    public void Dispose()\n    {\n        cts.Cancel();\n        cts.Dispose();\n    }\n}",
+      "hint": "`private readonly CancellationTokenSource cts = new();` creates it. Pass `cts.Token` to the service.",
+      "checks": [
+        {
+          "id": "page",
+          "label": "Route is `@page \"/report\"`",
+          "pattern": "^\\s*@page\\s+\\\"/report\\\"\\s*$",
+          "hint": "Keep `@page \"/report\"` as the first line."
+        },
+        {
+          "id": "implements",
+          "label": "`@implements IDisposable`",
+          "pattern": "^\\s*@implements\\s+(System\\.)?IDisposable\\s*$",
+          "hint": "Add `@implements IDisposable`."
+        },
+        {
+          "id": "inject",
+          "label": "`@inject ReportService Service`",
+          "pattern": "^\\s*@inject\\s+ReportService\\s+Service\\s*$",
+          "hint": "Add `@inject ReportService Service`."
+        },
+        {
+          "id": "cts",
+          "label": "A `CancellationTokenSource cts` field",
+          "pattern": "private\\s+(readonly\\s+)?CancellationTokenSource\\s+cts\\s*=\\s*new",
+          "hint": "Add `private readonly CancellationTokenSource cts = new();`."
+        },
+        {
+          "id": "load",
+          "label": "`OnInitializedAsync` awaits `Service.GetReportAsync(cts.Token)`",
+          "pattern": "OnInitializedAsync\\s*\\(\\s*\\)[\\s\\S]*?report\\s*=\\s*await\\s+Service\\.GetReportAsync\\s*\\(\\s*cts\\.Token\\s*\\)",
+          "hint": "In `OnInitializedAsync`, write `report = await Service.GetReportAsync(cts.Token);`."
+        },
+        {
+          "id": "loading",
+          "label": "Shows `<p>Loading...</p>` while `report` is `null`",
+          "pattern": "@if\\s*\\(\\s*(report\\s*(is\\s+null|==\\s*null)|null\\s*==\\s*report)\\s*\\)\\s*\\{\\s*<p>\\s*Loading(\\.\\.\\.|…)\\s*</p>",
+          "hint": "Write `@if (report is null) { <p>Loading...</p> }`."
+        },
+        {
+          "id": "cancel",
+          "label": "`Dispose` cancels and disposes `cts`",
+          "pattern": "public\\s+void\\s+Dispose\\s*\\(\\s*\\)[\\s\\S]*?cts\\.Cancel(Async)?\\s*\\(\\s*\\)[\\s\\S]*?cts\\.Dispose\\s*\\(\\s*\\)",
+          "hint": "In `Dispose`, call `cts.Cancel();` and then `cts.Dispose();`."
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "q1",
+      "body": "A child component has `[Parameter] public string Filter { get; set; }`. The parent changes the filter often. Which method runs **every time** the parent passes a new value?",
+      "options": [
+        "`OnInitialized`",
+        "`OnParametersSet`",
+        "`OnAfterRender` with `firstRender: true`",
+        "`Dispose`"
+      ],
+      "correct": 1,
+      "explanation": "`OnParametersSet{Async}` runs after every `SetParametersAsync`, so each time the parent passes parameters. `OnInitialized` runs only once per instance."
+    },
+    {
+      "id": "q2",
+      "body": "An AI tool wrote `await JS.InvokeVoidAsync(\"chart.draw\", ...)` in `OnInitializedAsync` of a prerendered page. Where should it go?",
+      "options": [
+        "In the constructor",
+        "In `OnParametersSetAsync`",
+        "In `OnAfterRenderAsync`, inside `if (firstRender)`",
+        "In `SetParametersAsync`, before `base.SetParametersAsync`"
+      ],
+      "correct": 2,
+      "explanation": "JS interop needs a browser and the rendered elements. `OnAfterRender{Async}` runs after the render and is **not called during prerendering**, so it's the safe place. `firstRender` makes it run only once."
+    },
+    {
+      "id": "q3",
+      "body": "`OnInitializedAsync` does `items = await Api.GetItemsAsync();`, which takes 2 seconds. What happens during those 2 seconds?",
+      "options": [
+        "The component renders once with `items` still unset, and renders again when the task finishes",
+        "Nothing is rendered until the task finishes",
+        "The component renders every 100 ms until the task finishes",
+        "The page shows an error until the task finishes"
+      ],
+      "correct": 0,
+      "explanation": "When the awaited task is not finished, Blazor **renders right away** with the current state, then renders again when it completes. That's why you start with `null` and show a loading state."
+    },
+    {
+      "id": "q4",
+      "body": "A page with `@rendermode InteractiveServer` and prerendering on loads its data in `OnInitializedAsync`. The database log shows **two** queries per visit. Why?",
+      "options": [
+        "`OnInitializedAsync` always runs twice",
+        "`OnParametersSetAsync` also calls the database",
+        "The browser requests the page twice",
+        "Two instances are created: one for the prerender on the server, one when the page becomes interactive"
+      ],
+      "correct": 3,
+      "explanation": "`OnInitialized{Async}` runs once **per instance**. Prerendering uses one instance to produce HTML, then the interactive circuit creates a new one. So the data loads twice unless you persist the prerendered state (Level 8)."
+    },
+    {
+      "id": "q5",
+      "body": "A component implements both `IDisposable` and `IAsyncDisposable`. What does Blazor call when the component is removed?",
+      "options": [
+        "Both, `Dispose` first",
+        "Both, `DisposeAsync` first",
+        "Only `DisposeAsync`",
+        "Only `Dispose`"
+      ],
+      "correct": 2,
+      "explanation": "If a component implements both interfaces, Blazor **only calls `DisposeAsync`**. Put all the cleanup there (or implement just one of them)."
+    },
+    {
+      "id": "q6",
+      "body": "What happens with this code?\n\n```csharp\nprotected override void OnAfterRender(bool firstRender)\n{\n    count++;\n    StateHasChanged();\n}\n```",
+      "options": [
+        "An endless loop: every render calls `OnAfterRender`, which asks for another render",
+        "It renders once more, then stops",
+        "Nothing: `StateHasChanged` is ignored in `OnAfterRender`",
+        "A build error: `StateHasChanged` can't be called there"
+      ],
+      "correct": 0,
+      "explanation": "`StateHasChanged` schedules a render, and each render calls `OnAfterRender` again. Without an `if (firstRender)` guard (or another condition), it never stops."
+    },
+    {
+      "id": "q7",
+      "body": "A component overrides `protected override bool ShouldRender() => false;`. What happens?",
+      "options": [
+        "The component never renders at all",
+        "It renders once (the first render), then skips every re-render",
+        "It renders only when `StateHasChanged` is called",
+        "It throws, because `ShouldRender` must return `true` at least once"
+      ],
+      "correct": 1,
+      "explanation": "`ShouldRender` is **not called for the first render**, so the component always renders once. After that, returning `false` skips re-renders, even after `StateHasChanged`."
+    },
+    {
+      "id": "q8",
+      "body": "A service raises an event from a background thread, and the component's handler needs to update the UI on Blazor Server. What should the handler call?",
+      "options": [
+        "`StateHasChanged()` directly",
+        "`OnInitialized()` again",
+        "`base.SetParametersAsync(ParameterView.Empty)`",
+        "`InvokeAsync(StateHasChanged)`"
+      ],
+      "correct": 3,
+      "explanation": "Code that runs outside Blazor (timers, service events) may be on another thread. `InvokeAsync` runs `StateHasChanged` on the component's own context. Calling it directly from another thread throws on the server."
+    },
+    {
+      "id": "q9",
+      "body": "What is the order of calls the **first** time a component is shown (interactive, no prerendering)?",
+      "options": [
+        "`OnInitialized` → render → `OnParametersSet` → `OnAfterRender`",
+        "`OnParametersSet` → `OnInitialized` → render → `OnAfterRender`",
+        "`SetParametersAsync` → `OnInitialized` → `OnParametersSet` → render → `OnAfterRender`",
+        "`OnAfterRender` → `OnInitialized` → `OnParametersSet` → render"
+      ],
+      "correct": 2,
+      "explanation": "Parameters arrive first (`SetParametersAsync`), then `OnInitialized{Async}`, then `OnParametersSet{Async}`, then the render, then `OnAfterRender{Async}(true)`."
+    },
+    {
+      "id": "q10",
+      "body": "A page has **no** interactive render mode (static SSR). It overrides `OnAfterRenderAsync` to log a message. When is the message logged?",
+      "options": [
+        "Never: `OnAfterRender{Async}` is not called in static SSR",
+        "Once, after the HTML is sent",
+        "Twice, like `OnInitialized` with prerendering",
+        "On every request, before `OnInitializedAsync`"
+      ],
+      "correct": 0,
+      "explanation": "In static SSR (and during prerendering), the server only writes HTML. There is no browser and no interactive render, so `OnAfterRender{Async}` is **never called**."
+    }
+  ],
+  "quizPassPercent": 80,
+  "interview": [
+    {
+      "id": "i1",
+      "question": "What are the main lifecycle methods of a Blazor component, in order?",
+      "modelAnswer": "`SetParametersAsync`, then `OnInitialized{Async}` (only the first time), then `OnParametersSet{Async}`, then the render, then `OnAfterRender{Async}` with `firstRender`. When the component is removed, `Dispose` or `DisposeAsync`. The sync version of each method runs before the async one."
+    },
+    {
+      "id": "i2",
+      "question": "What is the difference between `OnInitialized` and `OnParametersSet`?",
+      "modelAnswer": "`OnInitialized` runs once per component instance, after the first parameters are set. `OnParametersSet` runs every time parameters are set, including the first time. Work that depends on a parameter that can change, like a route `Id`, belongs in `OnParametersSet`."
+    },
+    {
+      "id": "i3",
+      "question": "Why does `OnInitializedAsync` sometimes run twice?",
+      "modelAnswer": "Because of prerendering. The server renders the page to HTML with one instance, then the page becomes interactive and a new instance is created, which runs `OnInitializedAsync` again. You can disable prerendering or persist the prerendered state to avoid loading twice."
+    },
+    {
+      "id": "i4",
+      "question": "Why do pages that load data in `OnInitializedAsync` need a null check?",
+      "modelAnswer": "When the method awaits a task that isn't finished, Blazor renders right away with the current state, so the data is still `null` on the first render. The markup must check for `null` and show a loading state, then Blazor renders again when the data arrives."
+    },
+    {
+      "id": "i5",
+      "question": "When and why do you use `OnAfterRender`?",
+      "modelAnswer": "After the component has rendered and its elements exist in the browser. It's the place for JS interop and for using `@ref` elements, like focusing an input. Use `firstRender` to do one-time setup. It isn't called during prerendering or static SSR."
+    },
+    {
+      "id": "i6",
+      "question": "When do you need to call `StateHasChanged` yourself?",
+      "modelAnswer": "When state changes outside Blazor's normal flow: a timer, an event from a service, or after loading something in `OnAfterRenderAsync`. Blazor already re-renders after lifecycle methods and UI events. From another thread, call `InvokeAsync(StateHasChanged)`."
+    },
+    {
+      "id": "i7",
+      "question": "What does `ShouldRender` do?",
+      "modelAnswer": "It's called before each re-render. If it returns `false`, the re-render is skipped. It isn't called for the first render, so the component always renders at least once. It's used to avoid expensive renders when nothing visible changed."
+    },
+    {
+      "id": "i8",
+      "question": "Why and how do you dispose a component?",
+      "modelAnswer": "To clean up anything that outlives it: unsubscribe from service events, dispose timers, and cancel pending work with a `CancellationTokenSource`. Otherwise you get leaks and code running for a removed component. Add `@implements IDisposable` and a `public void Dispose()` method, or `IAsyncDisposable` with `DisposeAsync` for async cleanup."
+    }
+  ]
+}

@@ -1,0 +1,435 @@
+{
+  "id": "level-05-routing",
+  "number": 5,
+  "title": "Routing and navigation",
+  "summary": "@page, route parameters, NavigationManager, and NavLink.",
+  "predict": [
+    {
+      "id": "A",
+      "title": "A constraint that doesn't match",
+      "body": "ProductDetails.razor:\n\n```razor\n@page \"/products/{Id:int}\"\n\n<h1>Product @Id</h1>\n\n@code {\n    [Parameter] public int Id { get; set; }\n}\n```\n\nNo other page has a route that starts with `/products`. The user types `/products/abc` in the address bar.\n\n**What happens?**",
+      "options": [
+        "It shows **Product 0**",
+        "It shows **Product abc**",
+        "The not-found page is shown",
+        "The page throws: `abc` can't be converted to `int`"
+      ],
+      "correct": 2,
+      "explanation": "`{Id:int}` is a **route constraint**. `abc` is not an integer, so this route **doesn't match at all**, and the router finds no other page. The user gets the not-found page (the Router's `NotFoundPage` in .NET 10). The page is never created, so there is no conversion error."
+    },
+    {
+      "id": "B",
+      "title": "Same page, new id",
+      "body": "ProductDetails.razor (interactive):\n\n```razor\n@page \"/products/{Id:int}\"\n\n<h1>@title</h1>\n<p>Id: @Id</p>\n<a href=\"products/@(Id + 1)\">Next</a>\n\n@code {\n    [Parameter] public int Id { get; set; }\n    private string title = \"\";\n\n    protected override void OnInitialized()\n    {\n        title = $\"Product {Id}\";\n    }\n}\n```\n\nThe user opens `/products/1`, then clicks **Next**.\n\n**What does the page show now?**",
+      "options": [
+        "**Product 2** and **Id: 2**",
+        "**Product 1** and **Id: 2**",
+        "**Product 1** and **Id: 1**",
+        "An error, because the same page can't be opened twice"
+      ],
+      "correct": 1,
+      "explanation": "Going from `/products/1` to `/products/2` keeps the **same component instance**. Blazor only sets `Id` again, so `@Id` shows **2**. But `OnInitialized` runs **once per instance**, so `title` still says **Product 1**. Compute it in **`OnParametersSet`**, which runs on every parameter change."
+    },
+    {
+      "id": "C",
+      "title": "The Home link that is always active",
+      "body": "NavMenu.razor:\n\n```razor\n<NavLink href=\"\">Home</NavLink>\n<NavLink href=\"orders\">Orders</NavLink>\n<NavLink href=\"admin\">Admin</NavLink>\n```\n\nThe app runs at the root of the site. The user is on `/orders/7`.\n\n**Which links get the `active` class?**",
+      "options": [
+        "Only **Orders**",
+        "None of them: `/orders/7` is not exactly `orders`",
+        "Only **Home**",
+        "**Home** and **Orders**"
+      ],
+      "correct": 3,
+      "explanation": "The default match is **`NavLinkMatch.Prefix`**: a link is active when the URL **starts with** its path. `orders` is a prefix of `orders/7`, so **Orders** is active. The empty `href` of **Home** is a prefix of **every** URL, so Home is always active too. Add `Match=\"NavLinkMatch.All\"` to the Home link."
+    },
+    {
+      "id": "D",
+      "title": "Which query value?",
+      "body": "Search.razor:\n\n```razor\n@page \"/search\"\n\n<p>Results for @Q, page @(Page ?? 1)</p>\n\n@code {\n    [SupplyParameterFromQuery] public string? Q { get; set; }\n    [SupplyParameterFromQuery(Name = \"p\")] public int? Page { get; set; }\n}\n```\n\nThe user opens `/search?q=cats&page=3`.\n\n**What does the page show?**",
+      "options": [
+        "Results for cats, page 1",
+        "Results for cats, page 3",
+        "Results for , page 1",
+        "An error: the query has a `page` value that no property uses"
+      ],
+      "correct": 0,
+      "explanation": "`Q` has no `Name`, so it reads the query value **`q`** (names ignore case): **cats**. `Page` has `Name = \"p\"`, so it reads **`p`**, not `page`. There is no `p` in the URL, so `Page` is `null` and the page shows **1**. Extra query values are simply ignored."
+    }
+  ],
+  "practice": [
+    {
+      "id": "e1",
+      "title": "Two URLs for one page",
+      "task": "Make **`Products.razor`** a page that opens at **`/products`** and also at **`/catalog`**.",
+      "starter": "@* Products.razor *@\n\n<h1>Products</h1>",
+      "solution": "@* Products.razor *@\n@page \"/products\"\n@page \"/catalog\"\n\n<h1>Products</h1>",
+      "hint": "A component can have more than one `@page` line.",
+      "checks": [
+        {
+          "id": "products",
+          "label": "A `@page \"/products\"` line",
+          "pattern": "^\\s*@page\\s+\"/products\"\\s*$",
+          "hint": "Add `@page \"/products\"` on its own line at the top."
+        },
+        {
+          "id": "catalog",
+          "label": "A `@page \"/catalog\"` line",
+          "pattern": "^\\s*@page\\s+\"/catalog\"\\s*$",
+          "hint": "Add a second line: `@page \"/catalog\"`."
+        },
+        {
+          "id": "title",
+          "label": "Still renders `<h1>Products</h1>`",
+          "pattern": "<h1>\\s*Products\\s*</h1>",
+          "hint": "Keep the `<h1>Products</h1>` heading."
+        }
+      ]
+    },
+    {
+      "id": "e2",
+      "title": "Read a route parameter",
+      "task": "Change **`ProductDetails.razor`** so it opens at URLs like **`/products/42`**:\n\n1. The route has a parameter **`Id`** that only matches integers.\n2. Add the matching **`int`** parameter property.\n3. Render it as `<h1>Product @Id</h1>`.",
+      "starter": "@* ProductDetails.razor *@\n@page \"/products\"\n\n<h1>Product</h1>\n\n@code {\n\n}",
+      "solution": "@* ProductDetails.razor *@\n@page \"/products/{Id:int}\"\n\n<h1>Product @Id</h1>\n\n@code {\n    [Parameter] public int Id { get; set; }\n}",
+      "hint": "Write the parameter in braces with a constraint: `{Id:int}`. The property needs `[Parameter]`.",
+      "checks": [
+        {
+          "id": "route",
+          "label": "Route is `/products/{Id:int}`",
+          "pattern": "^\\s*@page\\s+\"/products/\\{(?i:id):int\\}\"\\s*$",
+          "hint": "Change the route to `@page \"/products/{Id:int}\"`."
+        },
+        {
+          "id": "param",
+          "label": "A `[Parameter] public int Id` property",
+          "pattern": "\\[Parameter\\]\\s*public\\s+int\\s+Id\\s*\\{\\s*get;\\s*set;\\s*\\}",
+          "hint": "Inside `@code`, add `[Parameter] public int Id { get; set; }`."
+        },
+        {
+          "id": "render",
+          "label": "Renders `<h1>Product @Id</h1>`",
+          "pattern": "<h1>\\s*Product\\s+@Id\\s*</h1>",
+          "hint": "Change the heading to `<h1>Product @Id</h1>`."
+        }
+      ]
+    },
+    {
+      "id": "e3",
+      "title": "An optional parameter",
+      "task": "**`Orders.razor`** should open at **`/orders`** (all orders) and at **`/orders/open`**, **`/orders/shipped`**, and so on.\n\n1. Use **one** `@page` line with an **optional** parameter called **`Status`**.\n2. Add a nullable `string` parameter property for it.\n3. Show `<h1>Orders: @(Status ?? \"all\")</h1>`.",
+      "starter": "@* Orders.razor *@\n@page \"/orders\"\n\n<h1>Orders</h1>\n\n@code {\n\n}",
+      "solution": "@* Orders.razor *@\n@page \"/orders/{Status?}\"\n\n<h1>Orders: @(Status ?? \"all\")</h1>\n\n@code {\n    [Parameter] public string? Status { get; set; }\n}",
+      "hint": "A `?` after the name makes a route parameter optional: `{Status?}`. When it's missing, the property is `null`.",
+      "checks": [
+        {
+          "id": "route",
+          "label": "Route is `/orders/{Status?}`",
+          "pattern": "^\\s*@page\\s+\"/orders/\\{(?i:status)\\?\\}\"\\s*$",
+          "hint": "Change the route to `@page \"/orders/{Status?}\"`."
+        },
+        {
+          "id": "param",
+          "label": "A `[Parameter] public string? Status` property",
+          "pattern": "\\[Parameter\\]\\s*public\\s+string\\?\\s+Status\\b",
+          "hint": "Add `[Parameter] public string? Status { get; set; }`. It must be nullable, because `/orders` has no status."
+        },
+        {
+          "id": "render",
+          "label": "Shows `Status`, or `\"all\"` when it is null",
+          "pattern": "<h1>\\s*Orders:\\s*@\\(\\s*Status\\s*\\?\\?\\s*\"all\"\\s*\\)\\s*</h1>",
+          "hint": "Write `<h1>Orders: @(Status ?? \"all\")</h1>`."
+        },
+        {
+          "id": "one",
+          "label": "Only one `@page` line",
+          "pattern": "@page[\\s\\S]*@page",
+          "mustNotMatch": true,
+          "hint": "Use a single `@page` line with the optional parameter."
+        }
+      ]
+    },
+    {
+      "id": "e4",
+      "title": "Fix the page that doesn't update",
+      "task": "The user opens `/products/1`, clicks **Next**, and the URL changes to `/products/2`, but the product name doesn't change.\n\nFix it: load the product in the lifecycle method that runs **every time the parameters are set**, not only once.",
+      "starter": "@* ProductDetails.razor *@\n@page \"/products/{Id:int}\"\n@inject ProductService Catalog\n\n<h1>@product?.Name</h1>\n<a href=\"products/@(Id + 1)\">Next</a>\n\n@code {\n    [Parameter] public int Id { get; set; }\n    private Product? product;\n\n    protected override async Task OnInitializedAsync()\n    {\n        product = await Catalog.GetAsync(Id);\n    }\n}",
+      "solution": "@* ProductDetails.razor *@\n@page \"/products/{Id:int}\"\n@inject ProductService Catalog\n\n<h1>@product?.Name</h1>\n<a href=\"products/@(Id + 1)\">Next</a>\n\n@code {\n    [Parameter] public int Id { get; set; }\n    private Product? product;\n\n    protected override async Task OnParametersSetAsync()\n    {\n        product = await Catalog.GetAsync(Id);\n    }\n}",
+      "hint": "Blazor keeps the same component instance when only the route parameter changes. `OnInitializedAsync` runs once per instance (Level 4).",
+      "checks": [
+        {
+          "id": "method",
+          "label": "Overrides `OnParametersSetAsync`",
+          "pattern": "protected\\s+override\\s+async\\s+Task\\s+OnParametersSetAsync\\s*\\(\\s*\\)",
+          "hint": "Write `protected override async Task OnParametersSetAsync()`."
+        },
+        {
+          "id": "load",
+          "label": "`OnParametersSetAsync` loads the product with `Id`",
+          "pattern": "OnParametersSetAsync\\s*\\(\\s*\\)[\\s\\S]*?Catalog\\.GetAsync\\s*\\(\\s*Id\\s*\\)",
+          "hint": "Inside `OnParametersSetAsync`, call `product = await Catalog.GetAsync(Id);`."
+        },
+        {
+          "id": "not-init",
+          "label": "The product is no longer loaded in `OnInitializedAsync`",
+          "pattern": "OnInitializedAsync\\s*\\(\\s*\\)\\s*\\{[^}]*GetAsync",
+          "mustNotMatch": true,
+          "hint": "Move the loading out of `OnInitializedAsync` (you can rename the method)."
+        }
+      ]
+    },
+    {
+      "id": "e5",
+      "title": "Search with the query string",
+      "task": "**`Search.razor`** opens at URLs like `/search?q=blazor&page=2`.\n\n1. Fill **`Q`** from the query value `q`, and **`Page`** from the query value **`page`**.\n2. The **Next page** button goes to the current URL with `page` set to the next number. Build the URL with **`GetUriWithQueryParameter`**, and navigate **without** a full page reload.",
+      "starter": "@* Search.razor *@\n@page \"/search\"\n@inject NavigationManager Navigation\n\n<p>Results for @Q, page @(Page ?? 1)</p>\n<button @onclick=\"Next\">Next page</button>\n\n@code {\n    public string? Q { get; set; }\n    public int? Page { get; set; }\n\n    private void Next()\n    {\n        // TODO\n    }\n}",
+      "solution": "@* Search.razor *@\n@page \"/search\"\n@inject NavigationManager Navigation\n\n<p>Results for @Q, page @(Page ?? 1)</p>\n<button @onclick=\"Next\">Next page</button>\n\n@code {\n    [SupplyParameterFromQuery] public string? Q { get; set; }\n    [SupplyParameterFromQuery(Name = \"page\")] public int? Page { get; set; }\n\n    private void Next()\n    {\n        var url = Navigation.GetUriWithQueryParameter(\"page\", (Page ?? 1) + 1);\n        Navigation.NavigateTo(url);\n    }\n}",
+      "hint": "`[SupplyParameterFromQuery]` reads a query value. `GetUriWithQueryParameter` only **returns** a URL; pass it to `NavigateTo`.",
+      "checks": [
+        {
+          "id": "q",
+          "label": "`Q` has `[SupplyParameterFromQuery]`",
+          "pattern": "SupplyParameterFromQuery(\\s*\\(\\s*Name\\s*=\\s*\"q\"\\s*\\))?\\s*\\]\\s*public\\s+string\\??\\s+Q\\b",
+          "hint": "Add `[SupplyParameterFromQuery]` before `public string? Q`."
+        },
+        {
+          "id": "page",
+          "label": "`Page` reads the query value `page` and is nullable",
+          "pattern": "SupplyParameterFromQuery(\\s*\\(\\s*Name\\s*=\\s*\"page\"\\s*\\))?\\s*\\]\\s*public\\s+int\\?\\s+Page\\b",
+          "hint": "Add `[SupplyParameterFromQuery(Name = \"page\")]` (or just `[SupplyParameterFromQuery]`) before `public int? Page`."
+        },
+        {
+          "id": "uri",
+          "label": "Builds the URL with `GetUriWithQueryParameter(\"page\", ...)`",
+          "pattern": "GetUriWithQueryParameter\\s*\\(\\s*\"page\"\\s*,",
+          "hint": "Call `Navigation.GetUriWithQueryParameter(\"page\", (Page ?? 1) + 1)`."
+        },
+        {
+          "id": "nav",
+          "label": "Navigates with `NavigateTo`",
+          "pattern": "\\.NavigateTo\\s*\\(",
+          "hint": "Pass the new URL to `Navigation.NavigateTo(...)`."
+        },
+        {
+          "id": "no-reload",
+          "label": "No full page reload (`forceLoad: true`)",
+          "pattern": "forceLoad\\s*:\\s*true",
+          "mustNotMatch": true,
+          "hint": "Remove `forceLoad: true`: a link inside the app doesn't need a reload."
+        }
+      ]
+    },
+    {
+      "id": "e6",
+      "title": "A nav menu, from scratch",
+      "task": "Write **`NavMenu.razor`** with, inside `<nav>`:\n\n- A **Home** `NavLink` to `\"\"` that is active **only** on the home page.\n- An **Orders** `NavLink` to `\"orders\"` that is also active on `/orders/7` and other sub-pages.\n- An **Admin** `NavLink` to `\"admin\"` that uses the CSS class **`selected`** instead of `active`.\n- A **Log out** button that goes to `\"logout\"` with a **full page reload** (it's a server endpoint, not a Blazor page).",
+      "starter": "@* NavMenu.razor *@\n<nav>\n\n</nav>",
+      "solution": "@* NavMenu.razor *@\n@inject NavigationManager Navigation\n\n<nav>\n    <NavLink href=\"\" Match=\"NavLinkMatch.All\">Home</NavLink>\n    <NavLink href=\"orders\">Orders</NavLink>\n    <NavLink href=\"admin\" ActiveClass=\"selected\">Admin</NavLink>\n    <button @onclick=\"LogOut\">Log out</button>\n</nav>\n\n@code {\n    private void LogOut() => Navigation.NavigateTo(\"logout\", forceLoad: true);\n}",
+      "hint": "Home needs `Match=\"NavLinkMatch.All\"`. The default match (`Prefix`) is right for Orders. `ActiveClass` changes the class name. Inject `NavigationManager` for the button.",
+      "checks": [
+        {
+          "id": "home",
+          "label": "Home: `href=\"\"` with `Match=\"NavLinkMatch.All\"`",
+          "pattern": "<NavLink(?=[^>]*\\bhref\\s*=\\s*[\"']/?[\"'])(?=[^>]*\\bMatch\\s*=\\s*[\"']NavLinkMatch\\.All[\"'])[^>]*>\\s*Home\\s*</NavLink>",
+          "hint": "Write `<NavLink href=\"\" Match=\"NavLinkMatch.All\">Home</NavLink>`."
+        },
+        {
+          "id": "orders",
+          "label": "Orders: a `NavLink` to `orders`",
+          "pattern": "<NavLink(?=[^>]*\\bhref\\s*=\\s*[\"']/?orders[\"'])[^>]*>\\s*Orders\\s*</NavLink>",
+          "hint": "Write `<NavLink href=\"orders\">Orders</NavLink>`."
+        },
+        {
+          "id": "orders-prefix",
+          "label": "Orders keeps the default prefix match (no `NavLinkMatch.All`)",
+          "pattern": "<NavLink(?=[^>]*\\bhref\\s*=\\s*[\"']/?orders[\"'])[^>]*NavLinkMatch\\.All",
+          "mustNotMatch": true,
+          "hint": "Remove `Match=\"NavLinkMatch.All\"` from Orders, or it won't be active on `/orders/7`."
+        },
+        {
+          "id": "admin",
+          "label": "Admin: a `NavLink` to `admin` with `ActiveClass=\"selected\"`",
+          "pattern": "<NavLink(?=[^>]*\\bhref\\s*=\\s*[\"']/?admin[\"'])(?=[^>]*\\bActiveClass\\s*=\\s*[\"']selected[\"'])[^>]*>\\s*Admin\\s*</NavLink>",
+          "hint": "Write `<NavLink href=\"admin\" ActiveClass=\"selected\">Admin</NavLink>`."
+        },
+        {
+          "id": "inject",
+          "label": "Injects `NavigationManager`",
+          "pattern": "@inject\\s+NavigationManager\\s+\\w+",
+          "hint": "Add `@inject NavigationManager Navigation` at the top."
+        },
+        {
+          "id": "logout",
+          "label": "Log out calls `NavigateTo(\"logout\", forceLoad: true)`",
+          "pattern": "NavigateTo\\s*\\(\\s*\"/?logout\"\\s*,\\s*(forceLoad\\s*:\\s*)?true\\s*\\)",
+          "hint": "In the click handler, call `Navigation.NavigateTo(\"logout\", forceLoad: true);`."
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "q1",
+      "body": "A component starts with these two lines:\n\n```razor\n@page \"/products\"\n@page \"/catalog\"\n```\n\nWhat happens?",
+      "options": [
+        "A build error: only one `@page` is allowed",
+        "Both `/products` and `/catalog` open this component",
+        "Only the last one, `/catalog`, is used",
+        "`/catalog` redirects the browser to `/products`"
+      ],
+      "correct": 1,
+      "explanation": "A component can have **several `@page` directives**. Each one adds a route to the same component. There is no redirect: the URL stays as the user typed it."
+    },
+    {
+      "id": "q2",
+      "body": "A page has `[Parameter] public int Id { get; set; }`. Which route makes `/products/42` work and `/products/abc` **not** match?",
+      "options": [
+        "`@page \"/products/{Id}\"`",
+        "`@page \"/products/{Id:number}\"`",
+        "`@page \"/products/{int:Id}\"`",
+        "`@page \"/products/{Id:int}\"`"
+      ],
+      "correct": 3,
+      "explanation": "The syntax is **`{name:constraint}`**, and the integer constraint is **`int`**. There is no `number` constraint. Without a constraint, the route matches any text, and a non-number fails when Blazor converts it to `int`."
+    },
+    {
+      "id": "q3",
+      "body": "A page has `@page \"/files/{*Path}\"` and `[Parameter] public string? Path { get; set; }`. The user opens `/files/docs/2026/a.pdf`. What is `Path`?",
+      "options": [
+        "`docs/2026/a.pdf`",
+        "`docs`",
+        "`a.pdf`",
+        "`null`: the URL has too many segments"
+      ],
+      "correct": 0,
+      "explanation": "`{*Path}` is a **catch-all** parameter: it takes **the rest of the URL**, slashes included. It must be the last segment of the route and its property must be a `string`."
+    },
+    {
+      "id": "q4",
+      "body": "When should you call `Navigation.NavigateTo(url, forceLoad: true)`?",
+      "options": [
+        "Every time, so the page always has fresh data",
+        "When the target page has route parameters",
+        "When the URL is not a Blazor page, like a server endpoint (`/logout`) or a file download",
+        "When you want the **Back** button to skip the current page"
+      ],
+      "correct": 2,
+      "explanation": "`forceLoad: true` makes the browser do a **full page load** from the server, so the Blazor app starts again. Use it only to leave the router: server endpoints, downloads, other sites. Skipping the history entry is `replace: true`."
+    },
+    {
+      "id": "q5",
+      "body": "The current URL is `/search?q=cats&page=1`. What does `Navigation.GetUriWithQueryParameter(\"page\", 2)` do?",
+      "options": [
+        "It navigates to `/search?q=cats&page=2`",
+        "It returns `/search?page=2` (the other query values are removed)",
+        "It **returns** the full URL with `page=2` and `q=cats` kept, without navigating",
+        "It changes the `Page` property of the current page to `2`"
+      ],
+      "correct": 2,
+      "explanation": "`GetUriWithQueryParameter` only **builds a string**: the current URL with that query value added or replaced, the others kept. To go there, pass it to `NavigateTo`. Passing `null` as the value removes the parameter."
+    },
+    {
+      "id": "q6",
+      "body": "A menu has `<NavLink href=\"orders\">Orders</NavLink>`. The user is on `/orders/7/edit`. Does the link get the `active` class?",
+      "options": [
+        "Yes: the default match is `Prefix`, and the URL starts with `orders`",
+        "No: the default match is `All`, so only `/orders` matches",
+        "No: `NavLink` only checks the first segment of the URL when `Match` is set",
+        "Only if the page calls `StateHasChanged()`"
+      ],
+      "correct": 0,
+      "explanation": "**`NavLinkMatch.Prefix`** is the default: the link is active when the current URL **starts with** its path. Use `Match=\"NavLinkMatch.All\"` when only an exact match should count, which is what the Home link needs."
+    },
+    {
+      "id": "q7",
+      "body": "The app's base URL is `https://site.com/app/`. The current URL is `https://site.com/app/orders/7?x=1`. What does `Navigation.ToBaseRelativePath(Navigation.Uri)` return?",
+      "options": [
+        "`https://site.com/app/`",
+        "`/app/orders/7?x=1`",
+        "`/orders/7`",
+        "`orders/7?x=1`"
+      ],
+      "correct": 3,
+      "explanation": "`ToBaseRelativePath` removes **`BaseUri`** from the start of the URL. `BaseUri` always ends in `/`, so the result has no leading slash, and the query string is kept."
+    },
+    {
+      "id": "q8",
+      "body": "You want `/archive` and `/archive/2` to open the same page, with the page number as an `int`. Which is right?",
+      "options": [
+        "`@page \"/archive/{Page:int}\"` with `int Page`",
+        "`@page \"/archive/{Page:int?}\"` with `int? Page`",
+        "`@page \"/archive/{Page?:int}\"` with `int Page`",
+        "`@page \"/archive/[Page:int]\"` with `int? Page`"
+      ],
+      "correct": 1,
+      "explanation": "An optional parameter ends with **`?`**, after the constraint: `{Page:int?}`. Use a **nullable** property (`int?`) so `/archive` gives `null`. Without `?`, `/archive` doesn't match."
+    },
+    {
+      "id": "q9",
+      "body": "After a payment, the code calls `Navigation.NavigateTo(\"checkout/done\", replace: true)`. What does `replace: true` change?",
+      "options": [
+        "The current history entry is replaced, so **Back** doesn't return to the payment page",
+        "The page reloads from the server",
+        "The `checkout/done` component is created again even if it already exists",
+        "The current page's parameters are replaced, without changing the URL"
+      ],
+      "correct": 0,
+      "explanation": "`replace: true` **replaces** the current entry in the browser history instead of adding a new one. The user can't go **Back** to the payment form. It still navigates inside the app, with no reload."
+    },
+    {
+      "id": "q10",
+      "body": "In a .NET 10 app, `/products/999` matches the route `{Id:int}`, but product 999 doesn't exist in the database. How can the page show the app's not-found page?",
+      "options": [
+        "Throw a `NotFoundException`",
+        "Call `Navigation.NavigateTo(\"404\")`",
+        "Call `Navigation.NotFound()`",
+        "Return `null` from `OnInitializedAsync`"
+      ],
+      "correct": 2,
+      "explanation": "In .NET 10, **`NavigationManager.NotFound()`** tells Blazor to show the not-found page (the Router's `NotFoundPage`) for the current URL, and sets a 404 status during static server rendering. Navigating to a `404` URL changes the address and does not send a 404 status."
+    }
+  ],
+  "quizPassPercent": 80,
+  "interview": [
+    {
+      "id": "i1",
+      "question": "How does routing work in Blazor?",
+      "modelAnswer": "A component becomes a page with `@page \"/route\"`. The `Router` in `Routes.razor` scans the app's assembly for these routes, matches the current URL, and renders the page with `RouteView` inside its layout. Navigation between pages happens in the browser without a full reload."
+    },
+    {
+      "id": "i2",
+      "question": "How do you get a value from the URL path into a page?",
+      "modelAnswer": "With a route parameter: put a name in braces in the route, like `@page \"/products/{Id:int}\"`, and add a `[Parameter]` property with the same name (case doesn't matter). A constraint like `:int` checks the type; if the URL breaks it, the route doesn't match."
+    },
+    {
+      "id": "i3",
+      "question": "What happens when no route matches the URL?",
+      "modelAnswer": "The router shows the not-found content. In .NET 10 it's the component set in the Router's `NotFoundPage` parameter; older apps use a `<NotFound>` block. A page can also call `NavigationManager.NotFound()` when, for example, the item in the URL doesn't exist."
+    },
+    {
+      "id": "i4",
+      "question": "How do you read the query string in a Blazor page?",
+      "modelAnswer": "Add `[SupplyParameterFromQuery]` to a property of the page. It reads the query value with the same name, or the one given with `Name = \"...\"`. Use nullable types so a missing value is `null`. To build a URL with a changed value, use `GetUriWithQueryParameter`."
+    },
+    {
+      "id": "i5",
+      "question": "What is `NavigationManager` used for?",
+      "modelAnswer": "It reads the current URL (`Uri`, `BaseUri`, `ToBaseRelativePath`) and navigates from code with `NavigateTo`. `forceLoad: true` does a full page load from the server, for non-Blazor URLs; `replace: true` replaces the history entry. It also has the `LocationChanged` event."
+    },
+    {
+      "id": "i6",
+      "question": "What is `NavLink`, and what does `NavLinkMatch` control?",
+      "modelAnswer": "`NavLink` renders an `<a>` that adds a CSS class (`active` by default, or `ActiveClass`) when its URL is the current one. `NavLinkMatch.Prefix`, the default, matches when the URL starts with the link's path; `NavLinkMatch.All` needs the whole URL to match, which is what a Home link needs."
+    },
+    {
+      "id": "i7",
+      "question": "A page loads a product by route id. Going from `/products/1` to `/products/2` keeps showing product 1. Why, and how do you fix it?",
+      "modelAnswer": "Blazor reuses the same component instance and only sets the parameters again, so `OnInitializedAsync` doesn't run a second time. Load the data in `OnParametersSetAsync`, which runs every time the parameters are set."
+    },
+    {
+      "id": "i8",
+      "question": "What are optional and catch-all route parameters?",
+      "modelAnswer": "An optional parameter ends with `?`, like `{Status?}` or `{Page:int?}`, so the URL works with or without it, and the property is `null` when it's missing. A catch-all, `{*Path}`, takes the rest of the URL including slashes into a `string`. Both must be the last segment."
+    }
+  ]
+}

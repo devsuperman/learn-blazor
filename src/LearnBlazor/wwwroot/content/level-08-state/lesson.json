@@ -1,0 +1,427 @@
+{
+  "id": "level-08-state",
+  "number": 8,
+  "title": "State and cascading values",
+  "summary": "CascadingValue, state containers, and persisting prerendered state.",
+  "predict": [
+    {
+      "id": "A",
+      "title": "Matched by type",
+      "body": "MainLayout.razor:\n\n```razor\n<CascadingValue Value=\"theme\">\n    @Body\n</CascadingValue>\n\n@code {\n    private Theme theme = new() { Name = \"Dark\" };\n}\n```\n\nA component on a page:\n\n```razor\n<p>Theme: @ThemeName</p>\n\n@code {\n    [CascadingParameter] public string? ThemeName { get; set; }\n}\n```\n\n**What does the component show?**",
+      "options": [
+        "**Theme: Dark**",
+        "**Theme:** with nothing after it",
+        "An error: no cascading value of type `string`",
+        "**Theme: Theme**"
+      ],
+      "correct": 1,
+      "explanation": "A `[CascadingParameter]` is matched **by type**, not by property name. The layout cascades a `Theme`, but the component asks for a `string`, so nothing matches. The property stays `null` and Blazor reports **no error**. Ask for `public Theme? Theme { get; set; }` and render `@Theme?.Name`."
+    },
+    {
+      "id": "B",
+      "title": "Across the island",
+      "body": "The app has **no global render mode**, so the layout is static SSR. MainLayout.razor:\n\n```razor\n<CascadingValue Value=\"theme\">\n    @Body\n</CascadingValue>\n```\n\nThe page is static too, and contains one interactive component:\n\n```razor\n<ThemeLabel @rendermode=\"InteractiveServer\" />\n```\n\nThemeLabel.razor:\n\n```razor\n<p>@(Theme is null ? \"No theme\" : Theme.Name)</p>\n\n@code {\n    [CascadingParameter] public Theme? Theme { get; set; }\n}\n```\n\n**Once `ThemeLabel` is interactive, what does it show?**",
+      "options": [
+        "The theme's name, like in any other component",
+        "**No theme**",
+        "An error: `Theme` is not serializable",
+        "Nothing: the component doesn't render at all"
+      ],
+      "correct": 1,
+      "explanation": "An interactive component inside a static page is an **island**: it runs in its own, separate tree. A `<CascadingValue>` in the static layout does **not** cross that render mode boundary, so `Theme` is `null`. Fix it with a root-level value (`builder.Services.AddCascadingValue(...)`) or by making the whole app interactive."
+    },
+    {
+      "id": "C",
+      "title": "The count that doesn't move",
+      "body": "```csharp\npublic class CartState\n{\n    public List<string> Items { get; } = [];\n    public event Action? OnChange;\n\n    public void Add(string item)\n    {\n        Items.Add(item);\n        OnChange?.Invoke();\n    }\n}\n```\n\nCartCount.razor, in the layout's header:\n\n```razor\n@inject CartState Cart\n\n<span>Cart: @Cart.Items.Count</span>\n```\n\nProductCard.razor, on the page:\n\n```razor\n@inject CartState Cart\n\n<button @onclick=\"() => Cart.Add(Name)\">Add</button>\n```\n\nEverything is interactive and `CartState` is scoped. The header shows **Cart: 0**. You click **Add** once.\n\n**What does the header show right after the click?**",
+      "options": [
+        "**Cart: 1**",
+        "**Cart: 0**",
+        "An error: `OnChange` has no subscribers",
+        "**Cart: 1**, but only after a page refresh"
+      ],
+      "correct": 1,
+      "explanation": "The item **is** added to the service, but `CartCount` never subscribed to `OnChange`, so nobody tells it to re-render. Only `ProductCard` re-renders (it handled the click). `CartCount` keeps showing **0** until it re-renders for another reason. A refresh would make it worse: on Server it starts a new circuit with an empty cart. Subscribe in `OnInitialized` and call `InvokeAsync(StateHasChanged)`."
+    },
+    {
+      "id": "D",
+      "title": "How many fetches?",
+      "body": "```razor\n@page \"/orders\"\n@rendermode InteractiveServer\n@inject OrderService Orders\n\n@code {\n    private List<Order>? orders;\n\n    protected override async Task OnInitializedAsync()\n    {\n        Console.WriteLine(\"Fetching orders\");\n        orders = await Orders.GetAllAsync();\n    }\n}\n```\n\nPrerendering is on (the default). You open `/orders` once in a new tab.\n\n**How many times is \"Fetching orders\" written to the server console?**",
+      "options": [
+        "Once",
+        "Twice",
+        "Three times",
+        "Zero: `OnInitializedAsync` doesn't run during prerendering"
+      ],
+      "correct": 1,
+      "explanation": "**Twice.** The component runs once to **prerender** the HTML, then a new instance runs again when the circuit starts and it becomes interactive. Both runs call `OnInitializedAsync`, so the data is fetched twice. Persist it with `[PersistentState]` (or `PersistentComponentState`) to fetch it only once."
+    }
+  ],
+  "practice": [
+    {
+      "id": "e1",
+      "title": "Read a cascading value",
+      "task": "The layout already cascades a `Theme` object:\n\n```razor\n<CascadingValue Value=\"theme\">@Body</CascadingValue>\n```\n\nRight now every page has to pass `Theme=\"@theme\"` to `ThemedButton`. Change the button so it **receives the theme as a cascading parameter** instead. Keep the name `Theme`, and make it nullable, because it may be missing.",
+      "starter": "@* ThemedButton.razor *@\n<button class=\"btn @Theme.ButtonClass\">@ChildContent</button>\n\n@code {\n    [Parameter] public Theme Theme { get; set; } = default!;\n    [Parameter] public RenderFragment? ChildContent { get; set; }\n}",
+      "solution": "@* ThemedButton.razor *@\n<button class=\"btn @Theme?.ButtonClass\">@ChildContent</button>\n\n@code {\n    [CascadingParameter] public Theme? Theme { get; set; }\n    [Parameter] public RenderFragment? ChildContent { get; set; }\n}",
+      "hint": "A cascading parameter looks like a parameter, with a different attribute: `[CascadingParameter]`.",
+      "checks": [
+        {
+          "id": "casc",
+          "label": "A `[CascadingParameter] public Theme? Theme` property",
+          "pattern": "\\[CascadingParameter\\]\\s*public\\s+Theme\\?\\s+Theme\\s*\\{\\s*get;\\s*set;\\s*\\}",
+          "hint": "Write `[CascadingParameter] public Theme? Theme { get; set; }`."
+        },
+        {
+          "id": "noparam",
+          "label": "`Theme` is no longer a `[Parameter]`",
+          "pattern": "\\[Parameter\\]\\s*public\\s+Theme\\b",
+          "mustNotMatch": true,
+          "hint": "Replace `[Parameter]` with `[CascadingParameter]` on `Theme`."
+        },
+        {
+          "id": "null",
+          "label": "Reads it safely with `Theme?.ButtonClass`",
+          "pattern": "@Theme\\?\\.ButtonClass\\b",
+          "hint": "The value can be `null`: write `@Theme?.ButtonClass`."
+        },
+        {
+          "id": "child",
+          "label": "Still renders `@ChildContent`",
+          "pattern": "@ChildContent\\b",
+          "hint": "Keep `@ChildContent` inside the button."
+        }
+      ]
+    },
+    {
+      "id": "e2",
+      "title": "Provide a fixed value",
+      "task": "Make the layout give `theme` to **every page** below it:\n\n1. Wrap `@Body` in a **`<CascadingValue>`** whose `Value` is `theme`.\n2. The theme never changes while the app runs, so tell Blazor with **`IsFixed=\"true\"`**.",
+      "starter": "@* MainLayout.razor *@\n@inherits LayoutComponentBase\n\n<main>\n    @Body\n</main>\n\n@code {\n    private Theme theme = new() { ButtonClass = \"btn-dark\" };\n}",
+      "solution": "@* MainLayout.razor *@\n@inherits LayoutComponentBase\n\n<main>\n    <CascadingValue Value=\"theme\" IsFixed=\"true\">\n        @Body\n    </CascadingValue>\n</main>\n\n@code {\n    private Theme theme = new() { ButtonClass = \"btn-dark\" };\n}",
+      "hint": "`<CascadingValue Value=\"theme\" IsFixed=\"true\"> @Body </CascadingValue>`",
+      "checks": [
+        {
+          "id": "value",
+          "label": "A `<CascadingValue>` with `Value=\"theme\"`",
+          "pattern": "<CascadingValue\\b[^>]*\\bValue\\s*=\\s*[\\\"']@?theme[\\\"']",
+          "hint": "Add `<CascadingValue Value=\"theme\">`."
+        },
+        {
+          "id": "fixed",
+          "label": "It has `IsFixed=\"true\"`",
+          "pattern": "<CascadingValue\\b[^>]*\\bIsFixed\\s*=\\s*[\\\"']@?true[\\\"']",
+          "hint": "Add `IsFixed=\"true\"` to the `<CascadingValue>` tag."
+        },
+        {
+          "id": "wrap",
+          "label": "`@Body` is inside the `<CascadingValue>`",
+          "pattern": "<CascadingValue\\b[^>]*>\\s*@Body\\s*</CascadingValue>",
+          "hint": "Put `@Body` between `<CascadingValue ...>` and `</CascadingValue>`."
+        }
+      ]
+    },
+    {
+      "id": "e3",
+      "title": "A state container",
+      "task": "Finish **`CartState`**, a service that several components share:\n\n1. Add a public event **`OnChange`** of type `Action?`.\n2. Add a private method **`NotifyStateChanged`** that raises it (only if someone subscribed).\n3. Make **`Add`** call `NotifyStateChanged()` after adding the item.\n\n(It is registered with `builder.Services.AddScoped<CartState>();`.)",
+      "starter": "public class CartState\n{\n    public List<string> Items { get; } = [];\n\n    public void Add(string item)\n    {\n        Items.Add(item);\n    }\n}",
+      "solution": "public class CartState\n{\n    public List<string> Items { get; } = [];\n\n    public event Action? OnChange;\n\n    public void Add(string item)\n    {\n        Items.Add(item);\n        NotifyStateChanged();\n    }\n\n    private void NotifyStateChanged() => OnChange?.Invoke();\n}",
+      "hint": "`public event Action? OnChange;` and `private void NotifyStateChanged() => OnChange?.Invoke();`",
+      "checks": [
+        {
+          "id": "event",
+          "label": "A `public event Action? OnChange;`",
+          "pattern": "public\\s+event\\s+Action\\?\\s+OnChange\\s*;",
+          "hint": "Add `public event Action? OnChange;`."
+        },
+        {
+          "id": "notify",
+          "label": "`NotifyStateChanged` raises `OnChange` safely (`OnChange?.Invoke()`)",
+          "pattern": "void\\s+NotifyStateChanged\\s*\\(\\s*\\)\\s*(=>|\\{)\\s*OnChange\\?\\.Invoke\\s*\\(\\s*\\)",
+          "hint": "Write `private void NotifyStateChanged() => OnChange?.Invoke();`."
+        },
+        {
+          "id": "call",
+          "label": "`Add` calls `NotifyStateChanged()` after `Items.Add`",
+          "pattern": "Items\\.Add\\s*\\(\\s*item\\s*\\)\\s*;\\s*NotifyStateChanged\\s*\\(\\s*\\)\\s*;",
+          "hint": "Call `NotifyStateChanged();` right after `Items.Add(item);`."
+        }
+      ]
+    },
+    {
+      "id": "e4",
+      "title": "Subscribe and unsubscribe",
+      "task": "`CartCount` shows the number of items, but it doesn't update when another component adds one. Fix it:\n\n1. In **`OnInitialized`**, subscribe a method **`OnCartChanged`** to `Cart.OnChange`.\n2. `OnCartChanged` re-renders with **`InvokeAsync(StateHasChanged)`**.\n3. Implement **`IDisposable`** and unsubscribe in **`Dispose`**.",
+      "starter": "@* CartCount.razor *@\n@inject CartState Cart\n\n<span>Cart: @Cart.Items.Count</span>\n\n@code {\n\n}",
+      "solution": "@* CartCount.razor *@\n@implements IDisposable\n@inject CartState Cart\n\n<span>Cart: @Cart.Items.Count</span>\n\n@code {\n    protected override void OnInitialized()\n    {\n        Cart.OnChange += OnCartChanged;\n    }\n\n    private void OnCartChanged() => InvokeAsync(StateHasChanged);\n\n    public void Dispose()\n    {\n        Cart.OnChange -= OnCartChanged;\n    }\n}",
+      "hint": "Use `+=` in `OnInitialized` and `-=` in `Dispose`, with the same method.",
+      "checks": [
+        {
+          "id": "impl",
+          "label": "`@implements IDisposable`",
+          "pattern": "^\\s*@implements\\s+IDisposable\\s*$",
+          "hint": "Add `@implements IDisposable` at the top."
+        },
+        {
+          "id": "sub",
+          "label": "Subscribes in `OnInitialized` (`Cart.OnChange += OnCartChanged`)",
+          "pattern": "OnInitialized\\s*\\(\\s*\\)[\\s\\S]*?Cart\\.OnChange\\s*\\+=\\s*OnCartChanged\\s*;",
+          "hint": "In `OnInitialized`, write `Cart.OnChange += OnCartChanged;`."
+        },
+        {
+          "id": "invoke",
+          "label": "`OnCartChanged` calls `InvokeAsync(StateHasChanged)`",
+          "pattern": "void\\s+OnCartChanged\\s*\\(\\s*\\)\\s*(=>|\\{)\\s*(_\\s*=\\s*)?InvokeAsync\\s*\\(\\s*StateHasChanged\\s*\\)",
+          "hint": "Write `private void OnCartChanged() => InvokeAsync(StateHasChanged);`."
+        },
+        {
+          "id": "unsub",
+          "label": "Unsubscribes in `Dispose` (`Cart.OnChange -= OnCartChanged`)",
+          "pattern": "void\\s+Dispose\\s*\\(\\s*\\)[\\s\\S]*?Cart\\.OnChange\\s*-=\\s*OnCartChanged\\s*;",
+          "hint": "Add `public void Dispose() { Cart.OnChange -= OnCartChanged; }`."
+        }
+      ]
+    },
+    {
+      "id": "e5",
+      "title": "Stop the double fetch with [PersistentState]",
+      "task": "This page is prerendered, so `GetAllAsync` runs twice. Use the **.NET 10** way to fetch only once:\n\n1. Replace the field with a **public property** `Products` (type `List<Product>?`) marked **`[PersistentState]`**.\n2. In `OnInitializedAsync`, fetch only if nothing was restored, with **`??=`**.\n3. Update the markup to use `Products`.",
+      "starter": "@page \"/products\"\n@rendermode InteractiveServer\n@inject ProductService ProductService\n\n@if (products is null)\n{\n    <p>Loading...</p>\n}\nelse\n{\n    <p>@products.Count items</p>\n}\n\n@code {\n    private List<Product>? products;\n\n    protected override async Task OnInitializedAsync()\n    {\n        products = await ProductService.GetAllAsync();\n    }\n}",
+      "solution": "@page \"/products\"\n@rendermode InteractiveServer\n@inject ProductService ProductService\n\n@if (Products is null)\n{\n    <p>Loading...</p>\n}\nelse\n{\n    <p>@Products.Count items</p>\n}\n\n@code {\n    [PersistentState]\n    public List<Product>? Products { get; set; }\n\n    protected override async Task OnInitializedAsync()\n    {\n        Products ??= await ProductService.GetAllAsync();\n    }\n}",
+      "hint": "`[PersistentState] public List<Product>? Products { get; set; }` and `Products ??= await ...;`",
+      "checks": [
+        {
+          "id": "attr",
+          "label": "A `[PersistentState] public List<Product>? Products` property",
+          "pattern": "\\[PersistentState\\]\\s*public\\s+List<Product>\\?\\s+Products\\s*\\{\\s*get;\\s*set;\\s*\\}",
+          "hint": "Write `[PersistentState] public List<Product>? Products { get; set; }`. It must be public."
+        },
+        {
+          "id": "coalesce",
+          "label": "Fetches only when needed (`Products ??= await ...`)",
+          "pattern": "Products\\s*\\?\\?=\\s*await\\s+ProductService\\.GetAllAsync\\s*\\(\\s*\\)",
+          "hint": "Write `Products ??= await ProductService.GetAllAsync();`."
+        },
+        {
+          "id": "nofield",
+          "label": "The old private field is gone",
+          "pattern": "(?<![/\\w])products\\b",
+          "mustNotMatch": true,
+          "hint": "Replace every `products` with `Products`."
+        }
+      ]
+    },
+    {
+      "id": "e6",
+      "title": "Persist state by hand, from scratch",
+      "task": "Fix the double fetch on this page with the older **`PersistentComponentState`** API (you will see it in a lot of AI code):\n\n1. Inject **`PersistentComponentState`** as `AppState`, and implement **`IDisposable`**.\n2. In `OnInitializedAsync`, register a callback with **`RegisterOnPersisting`** and keep the subscription in a field.\n3. Use **`TryTakeFromJson<WeatherForecast[]>(\"forecasts\", ...)`**. Only call the service when it returns `false`.\n4. The callback saves `forecasts` with **`PersistAsJson(\"forecasts\", ...)`**.\n5. Dispose the subscription in **`Dispose`**.",
+      "starter": "@page \"/weather\"\n@rendermode InteractiveServer\n@inject WeatherService Weather\n\n@if (forecasts is null)\n{\n    <p>Loading...</p>\n}\nelse\n{\n    <p>@forecasts.Length days</p>\n}\n\n@code {\n    private WeatherForecast[]? forecasts;\n\n    protected override async Task OnInitializedAsync()\n    {\n        forecasts = await Weather.GetForecastsAsync();\n    }\n}",
+      "solution": "@page \"/weather\"\n@rendermode InteractiveServer\n@implements IDisposable\n@inject WeatherService Weather\n@inject PersistentComponentState AppState\n\n@if (forecasts is null)\n{\n    <p>Loading...</p>\n}\nelse\n{\n    <p>@forecasts.Length days</p>\n}\n\n@code {\n    private WeatherForecast[]? forecasts;\n    private PersistingComponentStateSubscription subscription;\n\n    protected override async Task OnInitializedAsync()\n    {\n        subscription = AppState.RegisterOnPersisting(Persist);\n\n        if (!AppState.TryTakeFromJson<WeatherForecast[]>(\"forecasts\", out var saved))\n        {\n            forecasts = await Weather.GetForecastsAsync();\n        }\n        else\n        {\n            forecasts = saved;\n        }\n    }\n\n    private Task Persist()\n    {\n        AppState.PersistAsJson(\"forecasts\", forecasts);\n        return Task.CompletedTask;\n    }\n\n    public void Dispose() => subscription.Dispose();\n}",
+      "hint": "Look at the `PersistentComponentState` example at the end of the theory, and use the key `\"forecasts\"` in both places.",
+      "checks": [
+        {
+          "id": "inject",
+          "label": "`@inject PersistentComponentState AppState`",
+          "pattern": "^\\s*@inject\\s+PersistentComponentState\\s+AppState\\s*$",
+          "hint": "Add `@inject PersistentComponentState AppState`."
+        },
+        {
+          "id": "impl",
+          "label": "`@implements IDisposable`",
+          "pattern": "^\\s*@implements\\s+IDisposable\\s*$",
+          "hint": "Add `@implements IDisposable`."
+        },
+        {
+          "id": "register",
+          "label": "Keeps the result of `AppState.RegisterOnPersisting(...)` in a field",
+          "pattern": "\\b\\w+\\s*=\\s*AppState\\.RegisterOnPersisting\\s*\\(\\s*\\w+",
+          "hint": "Write `subscription = AppState.RegisterOnPersisting(Persist);` with a `PersistingComponentStateSubscription subscription;` field."
+        },
+        {
+          "id": "take",
+          "label": "Calls `TryTakeFromJson<WeatherForecast[]>(\"forecasts\", out ...)`",
+          "pattern": "AppState\\.TryTakeFromJson\\s*<\\s*WeatherForecast\\[\\]\\s*>\\s*\\(\\s*\\\"forecasts\\\"\\s*,\\s*out\\s+",
+          "hint": "Use `AppState.TryTakeFromJson<WeatherForecast[]>(\"forecasts\", out var saved)`."
+        },
+        {
+          "id": "persist",
+          "label": "Saves with `PersistAsJson(\"forecasts\", forecasts)`",
+          "pattern": "AppState\\.PersistAsJson\\s*\\(\\s*\\\"forecasts\\\"\\s*,\\s*forecasts\\s*\\)",
+          "hint": "In the callback, write `AppState.PersistAsJson(\"forecasts\", forecasts);`."
+        },
+        {
+          "id": "dispose",
+          "label": "`Dispose` disposes the subscription",
+          "pattern": "void\\s+Dispose\\s*\\(\\s*\\)\\s*(=>|\\{)\\s*\\w+\\.Dispose\\s*\\(\\s*\\)",
+          "hint": "Write `public void Dispose() => subscription.Dispose();`."
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "q1",
+      "body": "A component has `[CascadingParameter] public Theme? Theme { get; set; }` with no `Name`. How does Blazor find its value?",
+      "options": [
+        "By the property name: an ancestor must cascade a value called `Theme`",
+        "From the DI container, like `@inject`",
+        "By type: the closest ancestor that cascades a `Theme` value",
+        "The parent must pass it as an attribute: `Theme=\"@theme\"`"
+      ],
+      "correct": 2,
+      "explanation": "Without `Name`, a cascading parameter is matched **by type**, and the **closest** ancestor `<CascadingValue>` of that type wins. If nothing matches, the property is `null`, with no error."
+    },
+    {
+      "id": "q2",
+      "body": "What does `IsFixed=\"true\"` on a `<CascadingValue>` do?",
+      "options": [
+        "It says the value never changes, so Blazor doesn't track the components that use it",
+        "It makes the value read-only for the components that receive it",
+        "It keeps the value when the user refreshes the page",
+        "It makes the value cross render mode boundaries"
+      ],
+      "correct": 0,
+      "explanation": "`IsFixed` is a **performance** hint: the value won't change, so Blazor skips tracking subscribers. If the value does change later, the components that use it are not updated."
+    },
+    {
+      "id": "q3",
+      "body": "You want a `Theme` cascading value for the **whole app**, set up once in `Program.cs`. Which line does that?",
+      "options": [
+        "`builder.Services.AddScoped<CascadingValue<Theme>>();`",
+        "`app.UseCascadingValue(new Theme());`",
+        "`builder.Services.AddSingleton<Theme>();` plus `[CascadingParameter]`",
+        "`builder.Services.AddCascadingValue(sp => new Theme());`"
+      ],
+      "correct": 3,
+      "explanation": "`AddCascadingValue` registers a **root-level** cascading value. Components read it with `[CascadingParameter]`, as if a `<CascadingValue>` wrapped the whole app. A plain `AddSingleton` is a service: you would read it with `@inject`, not `[CascadingParameter]`."
+    },
+    {
+      "id": "q4",
+      "body": "A static SSR page renders `<Dialog @rendermode=\"InteractiveServer\"><p>Hi</p></Dialog>`. It throws. Why?",
+      "options": [
+        "`Dialog` must be in the `.Client` project",
+        "`<p>Hi</p>` is a `RenderFragment` (`ChildContent`), which can't be serialized and passed into an interactive component",
+        "Interactive components can't have child content at all",
+        "`@rendermode` can't be used on a component tag"
+      ],
+      "correct": 1,
+      "explanation": "Parameters passed from a static parent into an interactive island must be **serializable**. A `RenderFragment` is code, not data, so Blazor refuses it. Cascading values from the static parent don't cross the boundary either."
+    },
+    {
+      "id": "q5",
+      "body": "On Blazor Server, a `CartState` service must hold **one cart per user**. Which lifetime fits?",
+      "options": [
+        "Singleton",
+        "Scoped",
+        "Transient",
+        "Any lifetime: Blazor makes state per user automatically"
+      ],
+      "correct": 1,
+      "explanation": "On Interactive Server, **Scoped** means one instance per **circuit** (one per user tab). A Singleton would share one cart between all users. Transient would give each component its own cart, so nothing is shared."
+    },
+    {
+      "id": "q6",
+      "body": "Why does a component call `InvokeAsync(StateHasChanged)` in its `OnChange` handler, instead of just `StateHasChanged()`?",
+      "options": [
+        "`StateHasChanged()` only works inside `OnAfterRender`",
+        "`InvokeAsync` saves the state to the browser first",
+        "It is the same thing; `InvokeAsync` is only for style",
+        "The event can be raised from another component or a background task, and `InvokeAsync` runs the re-render on this component's own dispatcher"
+      ],
+      "correct": 3,
+      "explanation": "The handler runs on whatever code raised the event: another component's click, or a timer thread. `InvokeAsync` moves the call onto **this** component's dispatcher. Calling `StateHasChanged()` from the wrong context can throw."
+    },
+    {
+      "id": "q7",
+      "body": "A user on an **Interactive Server** app presses F5 (refresh). What happens to the data in their scoped services and component fields?",
+      "options": [
+        "It is lost: the old circuit ends and a new one starts with new instances",
+        "It is kept, because scoped services live on the server",
+        "It is kept, because Blazor saves it in the browser automatically",
+        "It is kept only if the component uses `IsFixed`"
+      ],
+      "correct": 0,
+      "explanation": "A refresh starts a **new circuit**, so every scoped service and component is created again. To survive a refresh, keep the data in browser storage (like `ProtectedSessionStorage`) or on the server (a database)."
+    },
+    {
+      "id": "q8",
+      "body": "A prerendered component calls `await ProtectedLocalStorage.GetAsync<int>(\"count\")` in `OnInitializedAsync` and fails during prerendering. What is the fix?",
+      "options": [
+        "Register `ProtectedLocalStorage` as a singleton",
+        "Use `[PersistentState]` on the storage service",
+        "Move the call to `OnAfterRenderAsync` (on `firstRender`), because JS interop isn't available during prerendering",
+        "Use `IsFixed=\"true\"`"
+      ],
+      "correct": 2,
+      "explanation": "Protected browser storage uses **JS interop**, and there is no browser connection while the server prerenders. Read it in `OnAfterRenderAsync(firstRender)`, then call `StateHasChanged()`."
+    },
+    {
+      "id": "q9",
+      "body": "In the `PersistentComponentState` pattern, when does `TryTakeFromJson<T>(\"key\", out var value)` return `true`?",
+      "options": [
+        "On every render, after the first one",
+        "Only when the user has visited the page before",
+        "When the key exists in `localStorage`",
+        "When the interactive run finds a value that the prerender saved with `PersistAsJson`"
+      ],
+      "correct": 3,
+      "explanation": "During prerendering, the `RegisterOnPersisting` callback saves values with `PersistAsJson`. They are written into the HTML. On the interactive run, `TryTakeFromJson` finds them and returns `true`, so you skip the second fetch."
+    },
+    {
+      "id": "q10",
+      "body": "Which use of the .NET 10 `[PersistentState]` attribute is correct?",
+      "options": [
+        "`[PersistentState] public List<Order>? Orders { get; set; }` and `Orders ??= await Service.GetAsync();` in `OnInitializedAsync`",
+        "`[PersistentState] private List<Order>? orders;` and `orders = await Service.GetAsync();`",
+        "`[PersistentState]` on the `@inject` line of the service",
+        "`[PersistentState]` on the `OnInitializedAsync` method"
+      ],
+      "correct": 0,
+      "explanation": "`[PersistentState]` goes on a **public property**. Blazor restores it before `OnInitializedAsync` on the interactive run, so `??=` fetches only when nothing was restored."
+    }
+  ],
+  "quizPassPercent": 80,
+  "interview": [
+    {
+      "id": "i1",
+      "question": "What is a cascading value in Blazor?",
+      "modelAnswer": "A value that a component provides to **all** its descendants, at any depth, with `<CascadingValue>`. Descendants receive it with `[CascadingParameter]`, matched by type (or by `Name`). It avoids passing the same parameter through every level, and is often used for themes, the current user, or auth state."
+    },
+    {
+      "id": "i2",
+      "question": "What is the difference between `[Parameter]` and `[CascadingParameter]`?",
+      "modelAnswer": "A `[Parameter]` is set explicitly by the direct parent, as an attribute. A `[CascadingParameter]` is supplied by any ancestor's `<CascadingValue>` (or a root-level value), matched by type or name, without the parent writing anything. If no cascading value matches, it is simply `null`."
+    },
+    {
+      "id": "i3",
+      "question": "What do `Name` and `IsFixed` do on `<CascadingValue>`?",
+      "modelAnswer": "`Name` lets a consumer pick the value by name with `[CascadingParameter(Name = \"...\")]`, which you need when two values have the same type. `IsFixed=\"true\"` says the value never changes, so Blazor doesn't track subscribers. It is a performance optimization."
+    },
+    {
+      "id": "i4",
+      "question": "What is a root-level cascading value?",
+      "modelAnswer": "A cascading value registered in `Program.cs` with `builder.Services.AddCascadingValue(...)`. It is available to the whole app without a `<CascadingValue>` in the layout, including interactive components that run in a separate tree. `AddCascadingAuthenticationState()` is a common example."
+    },
+    {
+      "id": "i5",
+      "question": "Why doesn't a cascading value from a static layout reach an interactive component?",
+      "modelAnswer": "Because an interactive island in a static page runs in its own component tree, so there is no ancestor `<CascadingValue>` there. Parameters into an island must also be serializable, so a `RenderFragment` can't cross. Use a root-level cascading value or make the whole app interactive."
+    },
+    {
+      "id": "i6",
+      "question": "Describe the state container pattern.",
+      "modelAnswer": "A plain class registered as a scoped service that holds shared state and exposes an `event Action? OnChange`. Methods that change the state call `NotifyStateChanged()`, which raises the event. Components inject it, subscribe in `OnInitialized`, call `InvokeAsync(StateHasChanged)` in the handler, and unsubscribe in `Dispose`."
+    },
+    {
+      "id": "i7",
+      "question": "Where can state be lost in a Blazor app?",
+      "modelAnswer": "Component fields are lost when the component is disposed, for example on navigation. On Interactive Server, the circuit (scoped services) is lost on refresh, closing the tab, or a failed reconnect. On WebAssembly, all memory is lost on refresh. To keep state, use browser storage (`ProtectedLocalStorage`/`ProtectedSessionStorage` on Server, `localStorage` via JS on WebAssembly) or a database."
+    },
+    {
+      "id": "i8",
+      "question": "What is the double fetch problem, and how do you fix it?",
+      "modelAnswer": "With prerendering, a component runs twice: once on the server to produce HTML and again when it becomes interactive, so `OnInitializedAsync` loads the data twice and the UI can flicker. Fix it by persisting the prerendered data into the page: in .NET 10 with `[PersistentState]` on a public property and `??=`, or with `PersistentComponentState` (`RegisterOnPersisting`, `PersistAsJson`, `TryTakeFromJson`)."
+    }
+  ]
+}

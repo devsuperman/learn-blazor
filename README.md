@@ -29,7 +29,14 @@ The site is a standalone Blazor WebAssembly app in [`src/LearnBlazor/`](src/Lear
 | --- | --- | --- | --- |
 | 1 | Render modes | [`level-01-render-modes/`](level-01-render-modes/) | Not started |
 | 2 | Components and parameters | [`level-02-components/`](level-02-components/) | Not started |
-| 3-10 | On hold until Level 2 is passed | - | Blocked |
+| 3 | Data binding and events | [`level-03-binding-events/`](level-03-binding-events/) | Not started |
+| 4 | Component lifecycle | [`level-04-lifecycle/`](level-04-lifecycle/) | Not started |
+| 5 | Routing and navigation | [`level-05-routing/`](level-05-routing/) | Not started |
+| 6 | Forms and validation | [`level-06-forms/`](level-06-forms/) | Not started |
+| 7 | Dependency injection | [`level-07-dependency-injection/`](level-07-dependency-injection/) | Not started |
+| 8 | State and cascading values | [`level-08-state/`](level-08-state/) | Not started |
+| 9 | JavaScript interop | [`level-09-js-interop/`](level-09-js-interop/) | Not started |
+| 10 | Calling APIs and auth | [`level-10-data-auth/`](level-10-data-auth/) | Not started |
 
 ## The study loop
 

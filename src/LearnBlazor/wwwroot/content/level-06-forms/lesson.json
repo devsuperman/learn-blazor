@@ -1,0 +1,470 @@
+{
+  "id": "level-06-forms",
+  "number": 6,
+  "title": "Forms and validation",
+  "summary": "EditForm, input components, and data annotations.",
+  "predict": [
+    {
+      "id": "A",
+      "title": "No validator",
+      "body": "```razor\n<EditForm Model=\"model\" OnValidSubmit=\"Save\">\n    <InputText @bind-Value=\"model.Name\" />\n    <button type=\"submit\">Save</button>\n</EditForm>\n<p>@status</p>\n\n@code {\n    private Person model = new();\n    private string status = \"\";\n\n    private void Save() => status = \"Saved\";\n\n    public class Person\n    {\n        [Required] public string? Name { get; set; }\n    }\n}\n```\n\nThe component is interactive. You leave the name **empty** and click **Save**.\n\n**What happens?**",
+      "options": [
+        "An error message *The Name field is required.* appears",
+        "The page shows **Saved**",
+        "Nothing happens, and no message appears",
+        "An exception, because `[Required]` needs a validator"
+      ],
+      "correct": 1,
+      "explanation": "There is no **`<DataAnnotationsValidator />`**, so nobody reads the `[Required]` attribute. With no validator, every submit is valid, `OnValidSubmit` runs and the page shows **Saved**. The attributes only describe the rules; the validator component is what applies them."
+    },
+    {
+      "id": "B",
+      "title": "Two submit callbacks",
+      "body": "```razor\n<EditForm Model=\"model\" OnSubmit=\"Check\" OnValidSubmit=\"Save\">\n    <DataAnnotationsValidator />\n    <InputText @bind-Value=\"model.Name\" />\n    <button type=\"submit\">Save</button>\n</EditForm>\n```\n\n**What happens when this component renders?**",
+      "options": [
+        "`Check` runs first, then `Save` if the model is valid",
+        "Only `Save` runs, `OnSubmit` is ignored",
+        "Only `Check` runs, `OnValidSubmit` is ignored",
+        "An exception: `OnSubmit` can't be used together with `OnValidSubmit`"
+      ],
+      "correct": 3,
+      "explanation": "`OnSubmit` means *\"I'll handle validation myself\"*. `OnValidSubmit` / `OnInvalidSubmit` mean *\"Blazor validates for me\"*. You must choose one style, so `EditForm` throws an `InvalidOperationException`. Use `OnValidSubmit` (and maybe `OnInvalidSubmit`), or only `OnSubmit` with `editContext.Validate()`."
+    },
+    {
+      "id": "C",
+      "title": "A static SSR form with no name",
+      "body": "The page has **no render mode** (static SSR):\n\n```razor\n@page \"/contact\"\n\n<EditForm Model=\"Model\" OnValidSubmit=\"Send\">\n    <InputText @bind-Value=\"Model!.Email\" />\n    <button type=\"submit\">Send</button>\n</EditForm>\n\n@code {\n    [SupplyParameterFromForm]\n    private ContactModel? Model { get; set; }\n\n    protected override void OnInitialized() => Model ??= new();\n\n    private void Send() { /* ... */ }\n}\n```\n\nThe page loads fine. You type an email and click **Send**.\n\n**What happens?**",
+      "options": [
+        "`Send` runs normally",
+        "Nothing: a static page can't handle clicks",
+        "The POST fails with an error saying the request doesn't specify which form is being submitted",
+        "The page reloads and the email box is empty, but no error"
+      ],
+      "correct": 2,
+      "explanation": "Under static SSR, submit is a real **HTTP POST** to the page. The server must know **which form** on the page was posted, and it reads that from the form name. Without **`FormName`** the server can't map the POST to a form and returns an error. Add `FormName=\"contact\"` to the `EditForm`."
+    },
+    {
+      "id": "D",
+      "title": "The CSS classes",
+      "body": "```razor\n<EditForm Model=\"model\">\n    <DataAnnotationsValidator />\n    <InputText @bind-Value=\"model.Email\" />\n</EditForm>\n\n@code {\n    private Account model = new();\n\n    public class Account\n    {\n        [EmailAddress] public string? Email { get; set; }\n    }\n}\n```\n\nThe component is interactive. You type `hello` (no `@`) in the box and press **Tab** to leave it.\n\n**Which CSS classes does the `<input>` have now?**",
+      "options": [
+        "`valid`",
+        "`modified invalid`",
+        "`invalid`",
+        "`modified valid`"
+      ],
+      "correct": 1,
+      "explanation": "When the field changes, the `EditContext` marks it **modified** and the validator checks that field. `hello` is not an email, so it is also **invalid**. The input gets `modified invalid`, which the default CSS shows with a red outline. Before you touched it, it had only `valid` (an empty value passes `[EmailAddress]`)."
+    }
+  ],
+  "practice": [
+    {
+      "id": "e1",
+      "title": "Turn on validation",
+      "task": "This form has a `[Required]` rule, but it saves even when the name is empty. Fix it:\n\n1. Add the component that applies the data annotations.\n2. Add a **summary** of all errors, inside the form.\n3. Below the input, show the errors for **`model.Name`** only.",
+      "starter": "<EditForm Model=\"model\" OnValidSubmit=\"Save\">\n\n    <InputText @bind-Value=\"model.Name\" />\n\n    <button type=\"submit\">Save</button>\n</EditForm>\n\n@code {\n    private Person model = new();\n\n    private void Save() { }\n\n    public class Person\n    {\n        [Required] public string? Name { get; set; }\n    }\n}",
+      "solution": "<EditForm Model=\"model\" OnValidSubmit=\"Save\">\n    <DataAnnotationsValidator />\n    <ValidationSummary />\n\n    <InputText @bind-Value=\"model.Name\" />\n    <ValidationMessage For=\"() => model.Name\" />\n\n    <button type=\"submit\">Save</button>\n</EditForm>\n\n@code {\n    private Person model = new();\n\n    private void Save() { }\n\n    public class Person\n    {\n        [Required] public string? Name { get; set; }\n    }\n}",
+      "hint": "Three components: `<DataAnnotationsValidator />`, `<ValidationSummary />` and `<ValidationMessage For=\"...\" />`.",
+      "checks": [
+        {
+          "id": "validator",
+          "label": "Has `<DataAnnotationsValidator />`",
+          "pattern": "<DataAnnotationsValidator\\s*/>",
+          "hint": "Add `<DataAnnotationsValidator />` as the first thing inside the `EditForm`."
+        },
+        {
+          "id": "summary",
+          "label": "Has `<ValidationSummary />`",
+          "pattern": "<ValidationSummary\\b[^>]*/>",
+          "hint": "Add `<ValidationSummary />` inside the form."
+        },
+        {
+          "id": "message",
+          "label": "`<ValidationMessage For=\"() => model.Name\" />`",
+          "pattern": "<ValidationMessage\\s+For=\\\"@?\\(?\\s*\\(\\s*\\)\\s*=>\\s*model\\.Name\\s*\\)?\\\"\\s*/>",
+          "hint": "`For` takes a lambda: `<ValidationMessage For=\"() => model.Name\" />`."
+        },
+        {
+          "id": "inside",
+          "label": "The validator is inside the `EditForm`",
+          "pattern": "<EditForm[^>]*>[\\s\\S]*<DataAnnotationsValidator\\s*/>[\\s\\S]*</EditForm>",
+          "hint": "Put the validator between `<EditForm ...>` and `</EditForm>`."
+        }
+      ]
+    },
+    {
+      "id": "e2",
+      "title": "Write the rules",
+      "task": "Add data annotations to `OrderModel`:\n\n1. **`Customer`** is required, with 2 to 50 characters.\n2. **`Email`** is required and must look like an email.\n3. **`Quantity`** must be between **1** and **10**.",
+      "starter": "public class OrderModel\n{\n    public string? Customer { get; set; }\n\n    public string? Email { get; set; }\n\n    public int Quantity { get; set; }\n}",
+      "solution": "public class OrderModel\n{\n    [Required]\n    [StringLength(50, MinimumLength = 2)]\n    public string? Customer { get; set; }\n\n    [Required]\n    [EmailAddress]\n    public string? Email { get; set; }\n\n    [Range(1, 10)]\n    public int Quantity { get; set; }\n}",
+      "hint": "`[StringLength(50, MinimumLength = 2)]`, `[EmailAddress]` and `[Range(1, 10)]`. You can stack attributes, or write `[Required, EmailAddress]`.",
+      "checks": [
+        {
+          "id": "cust-req",
+          "label": "`Customer` is `[Required]`",
+          "pattern": "\\bRequired\\b[^;{}]*public\\s+string\\??\\s+Customer\\b",
+          "hint": "Put `[Required]` above `Customer`."
+        },
+        {
+          "id": "cust-len",
+          "label": "`Customer` has `[StringLength(50, MinimumLength = 2)]`",
+          "pattern": "StringLength\\(\\s*50\\s*,\\s*MinimumLength\\s*=\\s*2\\s*\\)[^;{}]*public\\s+string\\??\\s+Customer\\b",
+          "hint": "Add `[StringLength(50, MinimumLength = 2)]` above `Customer`."
+        },
+        {
+          "id": "email",
+          "label": "`Email` is `[Required]` and `[EmailAddress]`",
+          "pattern": "(Required[^;{}]*EmailAddress|EmailAddress[^;{}]*Required)[^;{}]*public\\s+string\\??\\s+Email\\b",
+          "hint": "Put `[Required]` and `[EmailAddress]` above `Email`."
+        },
+        {
+          "id": "range",
+          "label": "`Quantity` has `[Range(1, 10)]`",
+          "pattern": "\\[\\s*Range\\(\\s*1\\s*,\\s*10\\s*\\)\\s*\\]\\s*public\\s+int\\s+Quantity\\b",
+          "hint": "Add `[Range(1, 10)]` above `Quantity`."
+        }
+      ]
+    },
+    {
+      "id": "e3",
+      "title": "Fix the broken form",
+      "task": "An AI tool wrote this form. It throws when it renders, and the input doesn't bind. Fix it:\n\n1. Keep **only** `OnValidSubmit=\"Save\"` (remove `OnSubmit`).\n2. Bind the input the way input components need.\n3. Make the button submit the form.",
+      "starter": "<EditForm Model=\"model\" OnSubmit=\"Check\" OnValidSubmit=\"Save\">\n    <DataAnnotationsValidator />\n    <InputText @bind=\"model.Title\" />\n    <ValidationMessage For=\"() => model.Title\" />\n    <button type=\"button\">Save</button>\n</EditForm>",
+      "solution": "<EditForm Model=\"model\" OnValidSubmit=\"Save\">\n    <DataAnnotationsValidator />\n    <InputText @bind-Value=\"model.Title\" />\n    <ValidationMessage For=\"() => model.Title\" />\n    <button type=\"submit\">Save</button>\n</EditForm>",
+      "hint": "`OnSubmit` can't be mixed with `OnValidSubmit`. Input components use `@bind-Value`. A button submits only with `type=\"submit\"`.",
+      "checks": [
+        {
+          "id": "valid",
+          "label": "The form uses `OnValidSubmit=\"Save\"`",
+          "pattern": "<EditForm[^>]*\\bOnValidSubmit=\\\"@?Save\\\"",
+          "hint": "Keep `OnValidSubmit=\"Save\"` on the `EditForm`."
+        },
+        {
+          "id": "no-onsubmit",
+          "label": "No `OnSubmit` on the form",
+          "pattern": "\\bOnSubmit\\s*=",
+          "mustNotMatch": true,
+          "hint": "Remove `OnSubmit=\"Check\"`."
+        },
+        {
+          "id": "bind",
+          "label": "`<InputText @bind-Value=\"model.Title\" />`",
+          "pattern": "<InputText\\s+@bind-Value=\\\"@?model\\.Title\\\"",
+          "hint": "Write `@bind-Value=\"model.Title\"` (capital V)."
+        },
+        {
+          "id": "no-bind",
+          "label": "No plain `@bind=` left",
+          "pattern": "@bind\\s*=",
+          "mustNotMatch": true,
+          "hint": "Replace `@bind=` with `@bind-Value=`."
+        },
+        {
+          "id": "submit",
+          "label": "The button is `type=\"submit\"`",
+          "pattern": "<button[^>]*type=\\\"submit\\\"",
+          "hint": "Change the button to `<button type=\"submit\">`."
+        }
+      ]
+    },
+    {
+      "id": "e4",
+      "title": "Pick the right inputs",
+      "task": "`ProfileModel` has these properties:\n\n```csharp\npublic string? Bio { get; set; }          // long text\npublic DateOnly BirthDate { get; set; }\npublic bool AcceptTerms { get; set; }\npublic Plan Plan { get; set; }            // enum: Free, Pro\n```\n\nInside the form, add one input component for each property, bound with `@bind-Value`:\n\n- a multi-line text box for `Bio`\n- a date box for `BirthDate`\n- a checkbox for `AcceptTerms`\n- a drop-down (`<select>`) for `Plan`, with an option for `Free` and one for `Pro`",
+      "starter": "<EditForm Model=\"model\" OnValidSubmit=\"Save\">\n    <DataAnnotationsValidator />\n\n\n    <button type=\"submit\">Save</button>\n</EditForm>",
+      "solution": "<EditForm Model=\"model\" OnValidSubmit=\"Save\">\n    <DataAnnotationsValidator />\n\n    <InputTextArea @bind-Value=\"model.Bio\" />\n    <InputDate @bind-Value=\"model.BirthDate\" />\n    <InputCheckbox @bind-Value=\"model.AcceptTerms\" />\n    <InputSelect @bind-Value=\"model.Plan\">\n        <option value=\"Free\">Free</option>\n        <option value=\"Pro\">Pro</option>\n    </InputSelect>\n\n    <button type=\"submit\">Save</button>\n</EditForm>",
+      "hint": "`InputTextArea`, `InputDate`, `InputCheckbox` and `InputSelect` with `<option>` elements inside.",
+      "checks": [
+        {
+          "id": "bio",
+          "label": "`InputTextArea` bound to `model.Bio`",
+          "pattern": "<InputTextArea\\b[^>]*@bind-Value=\\\"@?model\\.Bio\\\"",
+          "hint": "Use `<InputTextArea @bind-Value=\"model.Bio\" />`."
+        },
+        {
+          "id": "date",
+          "label": "`InputDate` bound to `model.BirthDate`",
+          "pattern": "<InputDate\\b[^>]*@bind-Value=\\\"@?model\\.BirthDate\\\"",
+          "hint": "Use `<InputDate @bind-Value=\"model.BirthDate\" />`."
+        },
+        {
+          "id": "check",
+          "label": "`InputCheckbox` bound to `model.AcceptTerms`",
+          "pattern": "<InputCheckbox\\b[^>]*@bind-Value=\\\"@?model\\.AcceptTerms\\\"",
+          "hint": "Use `<InputCheckbox @bind-Value=\"model.AcceptTerms\" />`."
+        },
+        {
+          "id": "select",
+          "label": "`InputSelect` bound to `model.Plan`, with `Free` and `Pro` options",
+          "pattern": "<InputSelect\\b[^>]*@bind-Value=\\\"@?model\\.Plan\\\"[^>]*>(?=[\\s\\S]*?<option[^>]*value=\\\"Free\\\")(?=[\\s\\S]*?<option[^>]*value=\\\"Pro\\\")[\\s\\S]*?</InputSelect>",
+          "hint": "Write `<InputSelect @bind-Value=\"model.Plan\">` with `<option value=\"Free\">Free</option>` and `<option value=\"Pro\">Pro</option>` inside."
+        }
+      ]
+    },
+    {
+      "id": "e5",
+      "title": "Make it work under static SSR",
+      "task": "This page has **no render mode** (static SSR). Clicking **Send** fails. Fix it:\n\n1. Give the form the name **`contact`**.\n2. Make Blazor fill **`Model`** from the posted form data.\n3. Create the model in `OnInitialized` **only if it is `null`**.\n4. Turn on **enhanced** form handling, so the page doesn't fully reload.",
+      "starter": "@page \"/contact\"\n\n<EditForm Model=\"Model\" OnValidSubmit=\"Send\">\n    <DataAnnotationsValidator />\n    <InputText @bind-Value=\"Model!.Email\" />\n    <button type=\"submit\">Send</button>\n</EditForm>\n\n@code {\n    private ContactModel? Model { get; set; }\n\n    protected override void OnInitialized()\n    {\n        Model = new();\n    }\n\n    private void Send() { }\n}",
+      "solution": "@page \"/contact\"\n\n<EditForm Model=\"Model\" FormName=\"contact\" Enhance OnValidSubmit=\"Send\">\n    <DataAnnotationsValidator />\n    <InputText @bind-Value=\"Model!.Email\" />\n    <button type=\"submit\">Send</button>\n</EditForm>\n\n@code {\n    [SupplyParameterFromForm]\n    private ContactModel? Model { get; set; }\n\n    protected override void OnInitialized()\n    {\n        Model ??= new();\n    }\n\n    private void Send() { }\n}",
+      "hint": "`FormName=\"contact\"` and `Enhance` on the `EditForm`, `[SupplyParameterFromForm]` on the property, and `Model ??= new();`.",
+      "checks": [
+        {
+          "id": "name",
+          "label": "The form has `FormName=\"contact\"`",
+          "pattern": "<EditForm[^>]*\\bFormName=\\\"contact\\\"",
+          "hint": "Add `FormName=\"contact\"` to the `EditForm`."
+        },
+        {
+          "id": "supply",
+          "label": "`[SupplyParameterFromForm]` on the `Model` property",
+          "pattern": "\\[SupplyParameterFromForm[^\\]]*\\]\\s*(private|public)\\s+ContactModel\\??\\s+Model\\b",
+          "hint": "Put `[SupplyParameterFromForm]` right above `private ContactModel? Model { get; set; }`."
+        },
+        {
+          "id": "coalesce",
+          "label": "`Model ??= new()`",
+          "pattern": "\\bModel\\s*\\?\\?=\\s*new\\b",
+          "hint": "Write `Model ??= new();` so the posted values are kept."
+        },
+        {
+          "id": "no-overwrite",
+          "label": "No plain `Model = new()` that wipes the posted values",
+          "pattern": "\\bModel\\s*=\\s*new\\b",
+          "mustNotMatch": true,
+          "hint": "Replace `Model = new();` with `Model ??= new();`."
+        },
+        {
+          "id": "enhance",
+          "label": "The form has `Enhance`",
+          "pattern": "<EditForm[^>]*\\sEnhance\\b",
+          "hint": "Add the `Enhance` parameter to the `EditForm`."
+        }
+      ]
+    },
+    {
+      "id": "e6",
+      "title": "A sign-up form, from scratch",
+      "task": "Write the page **`/register`**:\n\n- A nested class **`RegisterModel`** with:\n  - **`Email`**: required, must be an email.\n  - **`Password`**: required, at least 8 characters (max 100).\n  - **`ConfirmPassword`**: must equal `Password`.\n- A field `model` of type `RegisterModel`.\n- An `EditForm` for `model` that calls **`Register`** only when the model is valid, with a validator and a summary.\n- One `InputText` per property (`type=\"password\"` for the two passwords) and a submit button.",
+      "starter": "@page \"/register\"\n\n",
+      "solution": "@page \"/register\"\n\n<EditForm Model=\"model\" OnValidSubmit=\"Register\">\n    <DataAnnotationsValidator />\n    <ValidationSummary />\n\n    <InputText @bind-Value=\"model.Email\" />\n    <InputText type=\"password\" @bind-Value=\"model.Password\" />\n    <InputText type=\"password\" @bind-Value=\"model.ConfirmPassword\" />\n\n    <button type=\"submit\">Register</button>\n</EditForm>\n\n@code {\n    private RegisterModel model = new();\n\n    private void Register() { }\n\n    public class RegisterModel\n    {\n        [Required, EmailAddress]\n        public string? Email { get; set; }\n\n        [Required, StringLength(100, MinimumLength = 8)]\n        public string? Password { get; set; }\n\n        [Compare(nameof(Password))]\n        public string? ConfirmPassword { get; set; }\n    }\n}",
+      "hint": "Start from the theory's complete form. `[Compare(nameof(Password))]` goes on `ConfirmPassword`.",
+      "checks": [
+        {
+          "id": "page",
+          "label": "Route is `@page \"/register\"`",
+          "pattern": "^\\s*@page\\s+\\\"/register\\\"\\s*$",
+          "hint": "Keep `@page \"/register\"` as the first line."
+        },
+        {
+          "id": "form",
+          "label": "`<EditForm Model=\"model\" OnValidSubmit=\"Register\">`",
+          "pattern": "<EditForm(?=[^>]*\\bModel=\\\"@?model\\\")(?=[^>]*\\bOnValidSubmit=\\\"@?Register\\\")[^>]*>",
+          "hint": "Write `<EditForm Model=\"model\" OnValidSubmit=\"Register\">`."
+        },
+        {
+          "id": "validator",
+          "label": "A validator and a summary",
+          "pattern": "<DataAnnotationsValidator\\s*/>[\\s\\S]*<ValidationSummary\\b|<ValidationSummary\\b[^>]*/>[\\s\\S]*<DataAnnotationsValidator\\s*/>",
+          "hint": "Add `<DataAnnotationsValidator />` and `<ValidationSummary />` inside the form."
+        },
+        {
+          "id": "email",
+          "label": "`Email` is required and an email address",
+          "pattern": "(Required[^;{}]*EmailAddress|EmailAddress[^;{}]*Required)[^;{}]*public\\s+string\\??\\s+Email\\b",
+          "hint": "Use `[Required, EmailAddress]` on `Email`."
+        },
+        {
+          "id": "pwd",
+          "label": "`Password` is required with a minimum length of 8",
+          "pattern": "Required[^;{}]*StringLength\\(\\s*\\d+\\s*,\\s*MinimumLength\\s*=\\s*8\\s*\\)[^;{}]*public\\s+string\\??\\s+Password\\b|StringLength\\(\\s*\\d+\\s*,\\s*MinimumLength\\s*=\\s*8\\s*\\)[^;{}]*Required[^;{}]*public\\s+string\\??\\s+Password\\b",
+          "hint": "Use `[Required, StringLength(100, MinimumLength = 8)]` on `Password`."
+        },
+        {
+          "id": "compare",
+          "label": "`ConfirmPassword` has `[Compare]` with `Password`",
+          "pattern": "Compare\\(\\s*(nameof\\(\\s*Password\\s*\\)|\\\"Password\\\")\\s*[,)][^;{}]*public\\s+string\\??\\s+ConfirmPassword\\b",
+          "hint": "Add `[Compare(nameof(Password))]` above `ConfirmPassword`."
+        },
+        {
+          "id": "inputs",
+          "label": "Password inputs use `type=\"password\"`",
+          "pattern": "<InputText(?=[^>]*type=\\\"password\\\")(?=[^>]*@bind-Value=\\\"@?model\\.ConfirmPassword\\\")[^>]*>",
+          "hint": "Write `<InputText type=\"password\" @bind-Value=\"model.ConfirmPassword\" />` (and the same for `Password`)."
+        },
+        {
+          "id": "submit",
+          "label": "A submit button",
+          "pattern": "<button[^>]*type=\\\"submit\\\"",
+          "hint": "Add `<button type=\"submit\">Register</button>`."
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "q1",
+      "body": "An `EditForm` sets both `Model=\"model\"` and `EditContext=\"editContext\"`. What happens?",
+      "options": [
+        "`EditContext` wins and `Model` is ignored",
+        "An exception: set `Model` **or** `EditContext`, not both",
+        "`Model` wins and `EditContext` is ignored",
+        "Both work, and the form validates twice"
+      ],
+      "correct": 1,
+      "explanation": "`EditForm` needs exactly one of them. With `Model`, it creates the `EditContext` for you. With `EditContext`, you created it yourself. Both at once throws an `InvalidOperationException`."
+    },
+    {
+      "id": "q2",
+      "body": "Which line shows the validation errors for `model.Email` only?",
+      "options": [
+        "`<ValidationMessage For=\"model.Email\" />`",
+        "`<ValidationMessage Field=\"Email\" />`",
+        "`<ValidationSummary For=\"() => model.Email\" />`",
+        "`<ValidationMessage For=\"() => model.Email\" />`"
+      ],
+      "correct": 3,
+      "explanation": "`For` takes a **lambda expression** that points to the property. Blazor reads the expression to find the field (the model object and the property name). A plain value or a string can't tell it which field you mean."
+    },
+    {
+      "id": "q3",
+      "body": "`[Required] public int Quantity { get; set; }`. The user leaves the number box empty and submits. Why does validation pass?",
+      "options": [
+        "An `int` always has a value (`0`), so `[Required]` never fails. Use `int?`",
+        "`[Required]` only works on strings",
+        "`InputNumber` ignores data annotations",
+        "It doesn't pass: the message *The Quantity field is required.* appears"
+      ],
+      "correct": 0,
+      "explanation": "`[Required]` fails only for `null` (or an empty string). An `int` is never `null`, so the rule can't fail. Make the property `int?` to know if the user filled it, or use `[Range(1, ...)]` to reject `0`."
+    },
+    {
+      "id": "q4",
+      "body": "Which input component do you use for a `bool` property like `AcceptTerms`?",
+      "options": [
+        "`InputText`",
+        "`InputRadio`",
+        "`InputCheckbox`",
+        "`InputSelect`"
+      ],
+      "correct": 2,
+      "explanation": "`InputCheckbox` renders `<input type=\"checkbox\">` and binds to a `bool` with `@bind-Value`."
+    },
+    {
+      "id": "q5",
+      "body": "Why does an `EditForm` in a **static SSR** page need `FormName`?",
+      "options": [
+        "To set the `name` attribute used by CSS",
+        "So the antiforgery token can be generated",
+        "To turn on enhanced navigation",
+        "Because submit is a real POST, and the server must know **which form** on the page was posted"
+      ],
+      "correct": 3,
+      "explanation": "Under static SSR, there is no live connection. The browser POSTs the form to the page, and the server renders the page again. The form name in the POST tells it which form (and which handler) to use. It must be unique on the page."
+    },
+    {
+      "id": "q6",
+      "body": "What does `[SupplyParameterFromForm]` on a property do?",
+      "options": [
+        "Makes the property a parameter the parent must set",
+        "On a form POST, fills the property from the posted form data",
+        "Saves the property in the browser between visits",
+        "Validates the property with data annotations"
+      ],
+      "correct": 1,
+      "explanation": "On a POST, Blazor binds the form fields to this property (`Model.Email` from the field named `Model.Email`, and so on). On a GET it stays `null`, which is why you write `Model ??= new()` in `OnInitialized`."
+    },
+    {
+      "id": "q7",
+      "body": "What does the `Enhance` parameter on an `EditForm` do?",
+      "options": [
+        "Sends the POST with `fetch` and patches the new HTML into the page, with no full reload",
+        "Makes the form interactive (like `InteractiveServer`)",
+        "Validates each field while the user types",
+        "Adds the antiforgery token"
+      ],
+      "correct": 0,
+      "explanation": "`Enhance` turns on **enhanced form handling**. It is still a POST and the page is still static SSR, but Blazor sends it in the background and updates the DOM, so the scroll position and page state are kept. On a plain `<form>`, use `data-enhance`."
+    },
+    {
+      "id": "q8",
+      "body": "A static SSR page uses a plain HTML `<form method=\"post\" @formname=\"search\">` instead of `EditForm`. The POST is rejected. What is missing?",
+      "options": [
+        "`@rendermode InteractiveServer`",
+        "`<DataAnnotationsValidator />`",
+        "`<AntiforgeryToken />` inside the form",
+        "`Enhance`"
+      ],
+      "correct": 2,
+      "explanation": "`app.UseAntiforgery()` rejects POSTs without a valid token. `EditForm` adds the token for you, but a plain `<form>` doesn't, so add `<AntiforgeryToken />` inside it."
+    },
+    {
+      "id": "q9",
+      "body": "When does `OnInvalidSubmit` run?",
+      "options": [
+        "When an input loses focus with a bad value",
+        "When the form is submitted and validation **fails**",
+        "On every submit, before `OnValidSubmit`",
+        "When the server returns an error"
+      ],
+      "correct": 1,
+      "explanation": "`OnInvalidSubmit` runs on submit when the `EditContext` has errors, `OnValidSubmit` when it has none. You can use both on the same form, for example to show a toast when the form is invalid."
+    },
+    {
+      "id": "q10",
+      "body": "Where does `[Compare]` go to check that the two passwords match?",
+      "options": [
+        "`[Compare(\"ConfirmPassword\")]` on `Password`",
+        "On the `EditForm`: `Compare=\"Password\"`",
+        "On both properties, each pointing to the other",
+        "`[Compare(nameof(Password))]` on `ConfirmPassword`"
+      ],
+      "correct": 3,
+      "explanation": "`[Compare]` goes on the property being checked, and names the **other** property it must equal. Put it on `ConfirmPassword`, so the error shows next to the confirm field."
+    }
+  ],
+  "quizPassPercent": 80,
+  "interview": [
+    {
+      "id": "i1",
+      "question": "What is `EditForm`, and what does it do?",
+      "modelAnswer": "A component that renders a `<form>` for a model. It creates an `EditContext` that tracks which fields changed and which have errors, shares it with the inputs and validators inside, and calls `OnValidSubmit` or `OnInvalidSubmit` when the form is submitted."
+    },
+    {
+      "id": "i2",
+      "question": "What is the difference between `OnSubmit`, `OnValidSubmit` and `OnInvalidSubmit`?",
+      "modelAnswer": "`OnValidSubmit` runs only when validation passes, `OnInvalidSubmit` only when it fails, and you can use both together. `OnSubmit` runs on every submit and leaves validation to you (`editContext.Validate()`). `OnSubmit` can't be combined with the other two."
+    },
+    {
+      "id": "i3",
+      "question": "How do data annotations become validation in a Blazor form?",
+      "modelAnswer": "You put attributes like `[Required]`, `[StringLength]`, `[Range]`, `[EmailAddress]` and `[Compare]` on the model's properties. Then `<DataAnnotationsValidator />` inside the `EditForm` reads them and adds errors to the `EditContext`. Without that component, the attributes do nothing."
+    },
+    {
+      "id": "i4",
+      "question": "How do you show validation errors to the user?",
+      "modelAnswer": "`<ValidationSummary />` shows all errors in a list. `<ValidationMessage For=\"() => model.Name\" />` shows the errors for one field. The inputs also get the `valid`, `invalid` and `modified` CSS classes, so the field can be styled."
+    },
+    {
+      "id": "i5",
+      "question": "Why do input components use `@bind-Value` and not `@bind`?",
+      "modelAnswer": "They are components with a `Value` parameter, so you bind to that parameter with `@bind-Value`. It also passes `ValueChanged` and a `ValueExpression`, and the expression tells the input which model field it edits, so validation can mark that field. `@bind` is for plain HTML elements."
+    },
+    {
+      "id": "i6",
+      "question": "When would you pass an `EditContext` instead of a `Model`?",
+      "modelAnswer": "When I need the `EditContext` in code: to call `Validate()` myself, check `IsModified()`, listen to `OnFieldChanged`, or add custom validation messages. Otherwise `Model` is simpler. You must set one or the other, never both."
+    },
+    {
+      "id": "i7",
+      "question": "How does a form work in a static SSR page?",
+      "modelAnswer": "Submit is a real HTTP POST to the page. The `EditForm` needs a unique `FormName` so the server knows which form was posted, and the model property needs `[SupplyParameterFromForm]` so Blazor fills it from the form data. You create the model with `Model ??= new()`. `Enhance` avoids a full page reload."
+    },
+    {
+      "id": "i8",
+      "question": "What is the antiforgery token, and how does Blazor use it?",
+      "modelAnswer": "A hidden token that proves the POST came from your own page, which protects against cross-site request forgery. `app.UseAntiforgery()` checks it on POST requests. `EditForm` adds the token automatically; a plain `<form>` needs `<AntiforgeryToken />`."
+    }
+  ]
+}
