@@ -1,0 +1,432 @@
+{
+  "id": "level-10-data-auth",
+  "number": 10,
+  "title": "Calling APIs and auth",
+  "summary": "HttpClient, AuthorizeView, and protecting pages.",
+  "predict": [
+    {
+      "id": "A",
+      "title": "No null check",
+      "body": "ProductCount.razor (interactive):\n\n```razor\n<p>@products.Count products</p>\n\n@code {\n    private List<Product>? products;\n\n    protected override async Task OnInitializedAsync()\n    {\n        products = await Http.GetFromJsonAsync<List<Product>>(\"api/products\");\n    }\n}\n```\n\nThe API is up and returns 3 products.\n\n**What happens when the component first renders?**",
+      "options": [
+        "It shows **3 products**",
+        "It throws a `NullReferenceException`",
+        "It shows **0 products**, then **3 products**",
+        "It shows nothing until the data arrives"
+      ],
+      "correct": 1,
+      "explanation": "Blazor renders the component **before** the `await` finishes. At that moment `products` is still `null`, so `products.Count` throws a `NullReferenceException`. Check for `null` first and show **Loading...** (`@if (products is null)`)."
+    },
+    {
+      "id": "B",
+      "title": "A POST that fails",
+      "body": "```razor\n<button @onclick=\"SaveAsync\">Save</button>\n<p>@message</p>\n\n@code {\n    private string message = \"\";\n\n    private async Task SaveAsync()\n    {\n        try\n        {\n            await Http.PostAsJsonAsync(\"api/todos\", new Todo(\"\"));\n            message = \"Saved!\";\n        }\n        catch (HttpRequestException)\n        {\n            message = \"Save failed.\";\n        }\n    }\n}\n```\n\nThe API rejects the empty title with **400 Bad Request**.\n\n**What does the page show after the click?**",
+      "options": [
+        "**Save failed.**",
+        "Nothing: the exception is not caught",
+        "**Saved!**",
+        "An error UI: 400 crashes the component"
+      ],
+      "correct": 2,
+      "explanation": "**Saved!** `PostAsJsonAsync` returns the `HttpResponseMessage` and does **not** throw on a 400 or 500. It only throws when the request can't be sent at all (for example, no network). Keep the response and call `response.EnsureSuccessStatusCode()` or check `response.IsSuccessStatusCode`."
+    },
+    {
+      "id": "C",
+      "title": "[Authorize] on a child",
+      "body": "AdminTools.razor (no `@page`):\n\n```razor\n@attribute [Authorize(Roles = \"Admin\")]\n\n<button>Delete everything</button>\n```\n\nThe home page uses it:\n\n```razor\n@page \"/\"\n\n<h1>Home</h1>\n<AdminTools />\n```\n\nThe router uses `AuthorizeRouteView`. A user who is **not logged in** opens `/`.\n\n**What do they see?**",
+      "options": [
+        "**Home** and the **Delete everything** button",
+        "**Home** only",
+        "A redirect to the login page",
+        "A build error: `[Authorize]` needs `@page`"
+      ],
+      "correct": 0,
+      "explanation": "`[Authorize]` is only checked on **routable components** (pages), by `AuthorizeRouteView`. On a child component it is **ignored**, so the button shows for everyone. To hide part of a page, wrap it in `<AuthorizeView Roles=\"Admin\">`."
+    },
+    {
+      "id": "D",
+      "title": "The wrong role",
+      "body": "```razor\n<AuthorizeView Roles=\"Admin\">\n    <Authorized>Delete</Authorized>\n    <NotAuthorized>Read only</NotAuthorized>\n</AuthorizeView>\n```\n\nBo is **logged in**. His only role is **Editor**.\n\n**What does Bo see?**",
+      "options": [
+        "**Delete**, because he is logged in",
+        "**Delete** and **Read only**",
+        "Nothing, because he has a role but not the right one",
+        "**Read only**"
+      ],
+      "correct": 3,
+      "explanation": "With `Roles=\"Admin\"`, being logged in is not enough: the user must be in the **Admin** role. Bo fails the check, so `<NotAuthorized>` renders: **Read only**. `NotAuthorized` covers both \"not logged in\" and \"logged in but not allowed\"."
+    }
+  ],
+  "practice": [
+    {
+      "id": "e1",
+      "title": "Register HttpClient in WebAssembly",
+      "task": "In the WebAssembly project's `Program.cs`, register an **`HttpClient`** as a **scoped** service, so components can `@inject HttpClient Http` and call relative URLs like `\"api/products\"`.\n\nIts **`BaseAddress`** must be the address of the site itself: `builder.HostEnvironment.BaseAddress`.",
+      "starter": "// Client/Program.cs\nvar builder = WebAssemblyHostBuilder.CreateDefault(args);\n\n// register HttpClient here\n\nawait builder.Build().RunAsync();",
+      "solution": "// Client/Program.cs\nvar builder = WebAssemblyHostBuilder.CreateDefault(args);\n\nbuilder.Services.AddScoped(sp =>\n    new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });\n\nawait builder.Build().RunAsync();",
+      "hint": "Use `builder.Services.AddScoped(sp => new HttpClient { BaseAddress = ... });`.",
+      "checks": [
+        {
+          "id": "scoped",
+          "label": "Registers `new HttpClient` with `AddScoped`",
+          "pattern": "builder\\.Services\\.AddScoped\\s*\\(\\s*\\w+\\s*=>\\s*new\\s+HttpClient\\b",
+          "hint": "Write `builder.Services.AddScoped(sp => new HttpClient { ... });`."
+        },
+        {
+          "id": "base",
+          "label": "`BaseAddress` is `new Uri(builder.HostEnvironment.BaseAddress)`",
+          "pattern": "BaseAddress\\s*=\\s*new\\s+Uri\\s*\\(\\s*builder\\.HostEnvironment\\.BaseAddress\\s*\\)",
+          "hint": "Inside the braces: `BaseAddress = new Uri(builder.HostEnvironment.BaseAddress)`."
+        },
+        {
+          "id": "run",
+          "label": "Still builds and runs the app",
+          "pattern": "await\\s+builder\\.Build\\(\\)\\.RunAsync\\(\\)\\s*;",
+          "hint": "Keep `await builder.Build().RunAsync();` as the last line."
+        }
+      ]
+    },
+    {
+      "id": "e2",
+      "title": "Loading, error, and data",
+      "task": "This page crashes on the first render and when the API is down. Fix it:\n\n1. Add a **`private string? error;`** field.\n2. Wrap the call in **`try/catch`**, catch **`HttpRequestException`**, and set `error` to `\"Could not load the products.\"`.\n3. In the markup: if `error` is not `null`, show it. Else, if `products` is `null`, show **`<p>Loading...</p>`**. Else show the list.",
+      "starter": "@page \"/products\"\n@inject HttpClient Http\n\n@foreach (var p in products)\n{\n    <p>@p.Name</p>\n}\n\n@code {\n    private List<Product>? products;\n\n    protected override async Task OnInitializedAsync()\n    {\n        products = await Http.GetFromJsonAsync<List<Product>>(\"api/products\");\n    }\n}",
+      "solution": "@page \"/products\"\n@inject HttpClient Http\n\n@if (error is not null)\n{\n    <p class=\"error\">@error</p>\n}\nelse if (products is null)\n{\n    <p>Loading...</p>\n}\nelse\n{\n    @foreach (var p in products)\n    {\n        <p>@p.Name</p>\n    }\n}\n\n@code {\n    private List<Product>? products;\n    private string? error;\n\n    protected override async Task OnInitializedAsync()\n    {\n        try\n        {\n            products = await Http.GetFromJsonAsync<List<Product>>(\"api/products\");\n        }\n        catch (HttpRequestException)\n        {\n            error = \"Could not load the products.\";\n        }\n    }\n}",
+      "hint": "Put the `GetFromJsonAsync` line inside `try { }`, and add `catch (HttpRequestException) { error = \"...\"; }`. In the markup use `@if (error is not null) { } else if (products is null) { } else { }`.",
+      "checks": [
+        {
+          "id": "field",
+          "label": "A `private string? error;` field",
+          "pattern": "private\\s+string\\??\\s+error\\s*(=\\s*[^;]+)?;",
+          "hint": "Add `private string? error;` inside `@code`."
+        },
+        {
+          "id": "try",
+          "label": "The call is inside a `try` block",
+          "pattern": "try\\s*\\{[^}]*GetFromJsonAsync",
+          "hint": "Wrap the `GetFromJsonAsync` line in `try { ... }`."
+        },
+        {
+          "id": "catch",
+          "label": "Catches `HttpRequestException` and sets `error`",
+          "pattern": "catch\\s*\\(\\s*HttpRequestException(\\s+\\w+)?\\s*\\)\\s*\\{[^}]*\\berror\\s*=",
+          "hint": "Add `catch (HttpRequestException) { error = \"Could not load the products.\"; }`."
+        },
+        {
+          "id": "show-error",
+          "label": "Shows `error` when it is not `null`",
+          "pattern": "@if\\s*\\(\\s*(error\\s+is\\s+not\\s+null|error\\s*!=\\s*null|!\\s*string\\.IsNullOrEmpty\\s*\\(\\s*error\\s*\\))\\s*\\)[\\s\\S]*?@error\\b",
+          "hint": "Start the markup with `@if (error is not null) { <p>@error</p> }`."
+        },
+        {
+          "id": "loading",
+          "label": "Shows `Loading...` while `products` is `null`",
+          "pattern": "if\\s*\\(\\s*(products\\s+is\\s+null|products\\s*==\\s*null)\\s*\\)\\s*\\{\\s*<p>\\s*Loading(\\.\\.\\.|…)\\s*</p>",
+          "hint": "Add `else if (products is null) { <p>Loading...</p> }`."
+        }
+      ]
+    },
+    {
+      "id": "e3",
+      "title": "Check the POST response",
+      "task": "This method always shows **Saved!**, even when the API answers 400 or 500, because `PostAsJsonAsync` doesn't throw on an error status.\n\n1. Keep the result in a variable called **`response`**.\n2. Use **`response.IsSuccessStatusCode`** (or `EnsureSuccessStatusCode()` with a `try/catch`) so the message is **`Saved!`** on success and **`Save failed.`** otherwise.",
+      "starter": "private string message = \"\";\n\nprivate async Task SaveAsync()\n{\n    await Http.PostAsJsonAsync(\"api/todos\", newTodo);\n    message = \"Saved!\";\n}",
+      "solution": "private string message = \"\";\n\nprivate async Task SaveAsync()\n{\n    var response = await Http.PostAsJsonAsync(\"api/todos\", newTodo);\n\n    if (response.IsSuccessStatusCode)\n    {\n        message = \"Saved!\";\n    }\n    else\n    {\n        message = \"Save failed.\";\n    }\n}",
+      "hint": "`var response = await Http.PostAsJsonAsync(...);` then `if (response.IsSuccessStatusCode) { ... } else { ... }`.",
+      "checks": [
+        {
+          "id": "var",
+          "label": "Keeps the result: `var response = await Http.PostAsJsonAsync(...)`",
+          "pattern": "(var|HttpResponseMessage)\\s+response\\s*=\\s*await\\s+Http\\.PostAsJsonAsync\\s*\\(\\s*\\\"api/todos\\\"",
+          "hint": "Write `var response = await Http.PostAsJsonAsync(\"api/todos\", newTodo);`."
+        },
+        {
+          "id": "status",
+          "label": "Checks the status (`IsSuccessStatusCode` or `EnsureSuccessStatusCode()`)",
+          "pattern": "response\\.(IsSuccessStatusCode\\b|EnsureSuccessStatusCode\\s*\\(\\s*\\))",
+          "hint": "Use `if (response.IsSuccessStatusCode)`."
+        },
+        {
+          "id": "failed",
+          "label": "Sets `message` to `\"Save failed.\"` on failure",
+          "pattern": "message\\s*=\\s*\\\"Save failed\\.\\\"\\s*;",
+          "hint": "In the failure branch, write `message = \"Save failed.\";`."
+        },
+        {
+          "id": "saved",
+          "label": "Still sets `message` to `\"Saved!\"` on success",
+          "pattern": "message\\s*=\\s*\\\"Saved!\\\"\\s*;",
+          "hint": "Keep `message = \"Saved!\";` in the success branch."
+        }
+      ]
+    },
+    {
+      "id": "e4",
+      "title": "Show and hide with AuthorizeView",
+      "task": "Right now everyone sees everything. Change the menu:\n\n1. Wrap the first part in **`<AuthorizeView>`**: logged-in users see **`Hello, @context.User.Identity?.Name!`** (in `<Authorized>`), others see the **login** link (in `<NotAuthorized>`).\n2. Wrap the **admin** link in a second `<AuthorizeView>` with **`Roles=\"Admin\"`**.",
+      "starter": "@* NavMenu.razor *@\n<span>Hello, @userName!</span>\n<a href=\"login\">Log in</a>\n\n<a href=\"admin\">Admin</a>\n\n@code {\n    private string userName = \"\";\n}",
+      "solution": "@* NavMenu.razor *@\n<AuthorizeView>\n    <Authorized>\n        <span>Hello, @context.User.Identity?.Name!</span>\n    </Authorized>\n    <NotAuthorized>\n        <a href=\"login\">Log in</a>\n    </NotAuthorized>\n</AuthorizeView>\n\n<AuthorizeView Roles=\"Admin\">\n    <a href=\"admin\">Admin</a>\n</AuthorizeView>",
+      "hint": "Inside `<Authorized>`, `context` is the `AuthenticationState`, so the name is `@context.User.Identity?.Name`.",
+      "checks": [
+        {
+          "id": "authorized",
+          "label": "`<Authorized>` greets `@context.User.Identity?.Name`",
+          "pattern": "<AuthorizeView\\s*>\\s*<Authorized>[\\s\\S]*?@context\\.User\\.Identity\\??\\.Name\\b[\\s\\S]*?</Authorized>",
+          "hint": "Write `<AuthorizeView><Authorized>Hello, @context.User.Identity?.Name!</Authorized>...`."
+        },
+        {
+          "id": "notauth",
+          "label": "`<NotAuthorized>` holds the login link",
+          "pattern": "<NotAuthorized>\\s*<a\\s+href=[\\\"']/?login[\\\"']\\s*>[\\s\\S]*?</NotAuthorized>",
+          "hint": "Move `<a href=\"login\">Log in</a>` into `<NotAuthorized>...</NotAuthorized>`."
+        },
+        {
+          "id": "admin",
+          "label": "The admin link is inside `<AuthorizeView Roles=\"Admin\">`",
+          "pattern": "<AuthorizeView\\s+Roles\\s*=\\s*[\\\"']Admin[\\\"']\\s*>(?:(?!</AuthorizeView>)[\\s\\S])*href=[\\\"']/?admin[\\\"']",
+          "hint": "Wrap the link: `<AuthorizeView Roles=\"Admin\"><a href=\"admin\">Admin</a></AuthorizeView>`."
+        },
+        {
+          "id": "no-field",
+          "label": "No more `userName` field",
+          "pattern": "\\buserName\\b",
+          "mustNotMatch": true,
+          "hint": "Read the name from `context.User`, and delete the `userName` field."
+        }
+      ]
+    },
+    {
+      "id": "e5",
+      "title": "Protect the page and the API",
+      "task": "A Blazor WebAssembly app has an admin page and an API endpoint. Protect **both** for the **Admin** role:\n\n1. In `Admin.razor`, add **`@attribute [Authorize(Roles = \"Admin\")]`** below `@page`.\n2. In the server's `Program.cs`, add **`.RequireAuthorization(...)`** to the `MapDelete` endpoint so only the Admin role can call it. (The page check runs in the browser and can be bypassed; the API check can't.)",
+      "starter": "@* Admin.razor *@\n@page \"/admin\"\n\n<h1>Admin</h1>\n\n// Server/Program.cs\napp.MapDelete(\"/api/products/{id:int}\", async (int id, AppDb db) =>\n{\n    await db.Products.Where(p => p.Id == id).ExecuteDeleteAsync();\n    return Results.NoContent();\n});",
+      "solution": "@* Admin.razor *@\n@page \"/admin\"\n@attribute [Authorize(Roles = \"Admin\")]\n\n<h1>Admin</h1>\n\n// Server/Program.cs\napp.MapDelete(\"/api/products/{id:int}\", async (int id, AppDb db) =>\n{\n    await db.Products.Where(p => p.Id == id).ExecuteDeleteAsync();\n    return Results.NoContent();\n})\n.RequireAuthorization(policy => policy.RequireRole(\"Admin\"));",
+      "hint": "`.RequireAuthorization()` takes a policy builder: `.RequireAuthorization(p => p.RequireRole(\"Admin\"))`. A named policy (`.RequireAuthorization(\"AdminOnly\")`) also works if you defined it.",
+      "checks": [
+        {
+          "id": "attr",
+          "label": "`@attribute [Authorize(Roles = \"Admin\")]` on the page",
+          "pattern": "@attribute\\s+\\[Authorize\\s*\\(\\s*Roles\\s*=\\s*\\\"Admin\\\"\\s*\\)\\s*\\]",
+          "hint": "Add `@attribute [Authorize(Roles = \"Admin\")]` right after `@page \"/admin\"`."
+        },
+        {
+          "id": "page",
+          "label": "The page still has `@page \"/admin\"`",
+          "pattern": "^\\s*@page\\s+\\\"/admin\\\"\\s*$",
+          "hint": "Keep `@page \"/admin\"`: `[Authorize]` only works on routable components."
+        },
+        {
+          "id": "api",
+          "label": "The endpoint calls `.RequireAuthorization(...)`",
+          "pattern": "\\)\\s*\\.RequireAuthorization\\s*\\(\\s*(\\w+\\s*=>\\s*\\w+\\.RequireRole\\s*\\(\\s*\\\"Admin\\\"\\s*\\)|\\\"\\w+\\\")\\s*\\)\\s*;",
+          "hint": "End the `MapDelete(...)` call with `.RequireAuthorization(p => p.RequireRole(\"Admin\"));`."
+        }
+      ]
+    },
+    {
+      "id": "e6",
+      "title": "Read the user in code, from scratch",
+      "task": "Write **`DeleteButton.razor`** (a component, not a page):\n\n- A **cascading parameter** `Task<AuthenticationState>` called **`AuthenticationStateTask`**.\n- In **`OnInitializedAsync`**, **await** it, get the `User`, and set a `private bool isAdmin` to `true` only if the user **is authenticated** and **is in the `Admin` role**.\n- Render `<button>Delete</button>` only when `isAdmin` is `true`.",
+      "starter": "@* DeleteButton.razor *@\n\n",
+      "solution": "@* DeleteButton.razor *@\n@if (isAdmin)\n{\n    <button>Delete</button>\n}\n\n@code {\n    [CascadingParameter]\n    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }\n\n    private bool isAdmin;\n\n    protected override async Task OnInitializedAsync()\n    {\n        if (AuthenticationStateTask is null)\n        {\n            return;\n        }\n\n        var authState = await AuthenticationStateTask;\n        var user = authState.User;\n\n        isAdmin = user.Identity?.IsAuthenticated == true && user.IsInRole(\"Admin\");\n    }\n}",
+      "hint": "`[CascadingParameter] private Task<AuthenticationState>? AuthenticationStateTask { get; set; }`, then `var user = (await AuthenticationStateTask).User;`.",
+      "checks": [
+        {
+          "id": "cascade",
+          "label": "A `[CascadingParameter]` of type `Task<AuthenticationState>`",
+          "pattern": "\\[CascadingParameter\\]\\s*(private|public|protected)?\\s*Task<AuthenticationState>\\??\\s+AuthenticationStateTask\\b",
+          "hint": "Add `[CascadingParameter] private Task<AuthenticationState>? AuthenticationStateTask { get; set; }`."
+        },
+        {
+          "id": "await",
+          "label": "Awaits the task in `OnInitializedAsync`",
+          "pattern": "OnInitializedAsync\\s*\\(\\s*\\)[\\s\\S]*?await\\s+AuthenticationStateTask\\b",
+          "hint": "Inside `protected override async Task OnInitializedAsync()`, write `var authState = await AuthenticationStateTask;`."
+        },
+        {
+          "id": "auth",
+          "label": "Checks `Identity.IsAuthenticated`",
+          "pattern": "Identity\\??\\.IsAuthenticated\\b",
+          "hint": "Use `user.Identity?.IsAuthenticated == true`."
+        },
+        {
+          "id": "role",
+          "label": "Checks `IsInRole(\"Admin\")`",
+          "pattern": "\\.IsInRole\\s*\\(\\s*\\\"Admin\\\"\\s*\\)",
+          "hint": "Use `user.IsInRole(\"Admin\")`."
+        },
+        {
+          "id": "if",
+          "label": "Renders the button only `@if (isAdmin)`",
+          "pattern": "@if\\s*\\(\\s*isAdmin\\s*\\)\\s*\\{\\s*<button[^>]*>\\s*Delete\\s*</button>",
+          "hint": "Write `@if (isAdmin) { <button>Delete</button> }`."
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "q1",
+      "body": "An AI tool wrote a Blazor **WebAssembly** component that opens a `SqlConnection` with a connection string. What is wrong?",
+      "options": [
+        "Nothing, as long as the connection string is in `appsettings.json`",
+        "It only needs `@rendermode InteractiveWebAssembly` to work",
+        "The code runs in the browser: the connection string would be public, and the browser can't connect to the database. It should call a server API",
+        "It should use `SqlConnection` in `OnAfterRenderAsync` instead"
+      ],
+      "correct": 2,
+      "explanation": "WebAssembly code is downloaded and runs in the **user's browser**. Everything in it (including config files in `wwwroot`) is visible, and the browser can't open a database connection. The path is browser → HTTP → **server API** → database."
+    },
+    {
+      "id": "q2",
+      "body": "`await Http.GetFromJsonAsync<Product>(\"api/products/99\")` and the API answers **404 Not Found**. What happens?",
+      "options": [
+        "It throws an `HttpRequestException`",
+        "It returns `null`",
+        "It returns an empty `Product`",
+        "It returns the `HttpResponseMessage`"
+      ],
+      "correct": 0,
+      "explanation": "`GetFromJsonAsync<T>` checks the status for you and **throws `HttpRequestException`** on a non-success status. It returns `null` only when the body is the JSON `null`. Catch the exception to show an error message."
+    },
+    {
+      "id": "q3",
+      "body": "`var response = await Http.PostAsJsonAsync(\"api/orders\", order);` and the API answers **500**. What is true?",
+      "options": [
+        "An `HttpRequestException` is thrown at this line",
+        "`response` is `null`",
+        "The order is sent again automatically",
+        "No exception: `response.IsSuccessStatusCode` is `false`"
+      ],
+      "correct": 3,
+      "explanation": "`PostAsJsonAsync` returns the response and **doesn't throw** on an error status. Check `response.IsSuccessStatusCode`, or call `response.EnsureSuccessStatusCode()`, which throws if the status is not 2xx."
+    },
+    {
+      "id": "q4",
+      "body": "A WebAssembly app at `https://app.example.com` calls `https://api.example.com/products`. The browser console says the request was **blocked by CORS policy**. Where is the fix?",
+      "options": [
+        "In the Blazor app: set a header on the `HttpClient`",
+        "In the **API**: allow the origin `https://app.example.com` with CORS (`AddCors` / `UseCors`)",
+        "In the browser settings of each user",
+        "Switch the component to `InteractiveAuto`"
+      ],
+      "correct": 1,
+      "explanation": "CORS is enforced by the browser, but **allowed by the server**. The API must send headers that allow your app's origin. Nothing in the Blazor client can turn it off. An API on the same origin doesn't need CORS."
+    },
+    {
+      "id": "q5",
+      "body": "What does `<Authorizing>` inside `<AuthorizeView>` render?",
+      "options": [
+        "Content for users who are allowed",
+        "Content shown **while the authentication state is still loading**",
+        "Content for users with any role",
+        "A login form"
+      ],
+      "correct": 1,
+      "explanation": "`Authorizing` shows while Blazor is still getting the `AuthenticationState` (for example, in WebAssembly while it loads). Then it switches to `Authorized` or `NotAuthorized`."
+    },
+    {
+      "id": "q6",
+      "body": "You put `@attribute [Authorize]` on `UserMenu.razor`, a component **without `@page`** that is used in the layout. An anonymous user opens the site. What happens?",
+      "options": [
+        "The menu is hidden",
+        "The user is redirected to login",
+        "A build error",
+        "The menu renders anyway: `[Authorize]` is ignored on non-page components"
+      ],
+      "correct": 3,
+      "explanation": "`[Authorize]` is only checked for **routable components**, by the router (`AuthorizeRouteView`) or the endpoint. For part of a page, use `<AuthorizeView>`."
+    },
+    {
+      "id": "q7",
+      "body": "What does `<AuthorizeView Roles=\"Admin,Manager\">` require?",
+      "options": [
+        "The user is in **Admin or Manager** (any of them)",
+        "The user is in **both** Admin and Manager",
+        "The user is in a role named `Admin,Manager`",
+        "Only that the user is logged in"
+      ],
+      "correct": 0,
+      "explanation": "A comma-separated `Roles` list means **any** of these roles is enough. To require both, nest two `AuthorizeView`s or use a policy."
+    },
+    {
+      "id": "q8",
+      "body": "A component reads the user in code. Which is correct?",
+      "options": [
+        "`@inject ClaimsPrincipal User` and use `User` directly",
+        "`[Parameter] public AuthenticationState Auth { get; set; }`",
+        "`[CascadingParameter] Task<AuthenticationState>? AuthenticationStateTask { get; set; }`, then `(await AuthenticationStateTask).User`",
+        "`HttpContext.User`, which works in every render mode"
+      ],
+      "correct": 2,
+      "explanation": "With `AddCascadingAuthenticationState()` registered, every component can receive a cascading **`Task<AuthenticationState>`**. Await it to get the `User`. `HttpContext` is not available in interactive components."
+    },
+    {
+      "id": "q9",
+      "body": "A page has `@attribute [Authorize]`, but in the interactive app anonymous users can still open it by clicking a link. The router has `<RouteView RouteData=\"routeData\" ... />`. What is the fix?",
+      "options": [
+        "Add `[Authorize]` to `MainLayout` too",
+        "Remove `@page` from the protected page",
+        "Wrap the page content in `<NotAuthorized>`",
+        "Replace `RouteView` with **`AuthorizeRouteView`**"
+      ],
+      "correct": 3,
+      "explanation": "`RouteView` just renders the page. **`AuthorizeRouteView`** checks `[Authorize]` before rendering, and shows its `<NotAuthorized>` content when the check fails."
+    },
+    {
+      "id": "q10",
+      "body": "A WebAssembly app hides the **Delete** button with `<AuthorizeView Roles=\"Admin\">`. The API endpoint `DELETE /api/products/{id}` has no authorization. Is it safe?",
+      "options": [
+        "No: anyone can call the API directly or change the client code. The API must require the Admin role too",
+        "Yes: non-admins never see the button",
+        "Yes, if the page also has `[Authorize]`",
+        "Yes, because WebAssembly code is compiled and can't be changed"
+      ],
+      "correct": 0,
+      "explanation": "Client checks are **user experience**, not security. The user controls the browser: they can call the endpoint with any HTTP tool. Protect the endpoint with `[Authorize]` or `.RequireAuthorization()`."
+    }
+  ],
+  "quizPassPercent": 80,
+  "interview": [
+    {
+      "id": "i1",
+      "question": "How do you call a web API from a Blazor component?",
+      "modelAnswer": "Inject `HttpClient` (or a service that wraps it) and use the JSON helpers: `GetFromJsonAsync<T>` to read, `PostAsJsonAsync` to send. Call it in `OnInitializedAsync` or an event handler, show a loading state while the result is `null`, and handle errors with `try/catch` and the status code."
+    },
+    {
+      "id": "i2",
+      "question": "How should you create an `HttpClient` on the server, and why?",
+      "modelAnswer": "Through `IHttpClientFactory`, usually as a typed client registered with `AddHttpClient<MyClient>(c => c.BaseAddress = ...)`. The factory reuses and refreshes the underlying connections, so you avoid running out of sockets or keeping stale DNS, which can happen when you `new HttpClient()` everywhere."
+    },
+    {
+      "id": "i3",
+      "question": "Why does a Blazor WebAssembly app need a web API for its data?",
+      "modelAnswer": "Because its code runs in the user's browser. The browser can't connect to a database, and any secret like a connection string would be public. So the client calls an HTTP API on the server, and only the server talks to the database. If the API is on another origin, the API must allow it with CORS."
+    },
+    {
+      "id": "i4",
+      "question": "What is the difference between authentication and authorization?",
+      "modelAnswer": "Authentication is finding out who the user is, for example by logging in; the result is a `ClaimsPrincipal` with claims. Authorization is deciding what that user may do, by checking roles, claims or policies. In Blazor, ASP.NET Core handles authentication, and components use the result to authorize."
+    },
+    {
+      "id": "i5",
+      "question": "How does a component know who the current user is?",
+      "modelAnswer": "`AuthenticationStateProvider` gives the `AuthenticationState`. With `AddCascadingAuthenticationState()`, it is cascaded as a `Task<AuthenticationState>`. A component takes it as a `[CascadingParameter]`, awaits it, and reads `User`: `Identity.IsAuthenticated`, `Identity.Name`, `IsInRole`. In markup, `AuthorizeView` does this for you."
+    },
+    {
+      "id": "i6",
+      "question": "When do you use `AuthorizeView` and when `[Authorize]`?",
+      "modelAnswer": "`[Authorize]` protects a whole page: it only works on components with `@page`, and the router's `AuthorizeRouteView` enforces it. `AuthorizeView` shows or hides part of the markup, with `Authorized`, `NotAuthorized` and `Authorizing` content, and optional `Roles` or `Policy`."
+    },
+    {
+      "id": "i7",
+      "question": "An Auto component loads data. How do you make it work both on the server and in the browser?",
+      "modelAnswer": "Hide the data access behind an interface, like `IProductService`. Register an implementation that uses `HttpClient` to call the API in the client project, and one that reads the database directly in the server project. The component only injects the interface, so it works during server prerendering and after it moves to WebAssembly."
+    },
+    {
+      "id": "i8",
+      "question": "Is hiding a button with `AuthorizeView` in a WebAssembly app enough to secure an action?",
+      "modelAnswer": "No. The client code runs in the user's browser and can be changed or skipped, and anyone can call the API directly. Hiding UI is only for user experience. The API must enforce authorization with `[Authorize]` or `.RequireAuthorization()`."
+    }
+  ]
+}
