@@ -1,0 +1,424 @@
+{
+  "id": "level-07-dependency-injection",
+  "number": 7,
+  "title": "Dependency injection",
+  "summary": "@inject, service lifetimes, and what Scoped means per mode.",
+  "predict": [
+    {
+      "id": "A",
+      "title": "A singleton counter",
+      "body": "Program.cs (Blazor Web App, Interactive Server):\n\n```csharp\nbuilder.Services.AddSingleton<VisitCounter>();\n```\n\n```csharp\npublic class VisitCounter\n{\n    public int Count { get; set; }\n}\n```\n\nCounter.razor:\n\n```razor\n@page \"/counter\"\n@rendermode InteractiveServer\n@inject VisitCounter Counter\n\n<p>Clicks: @Counter.Count</p>\n<button @onclick=\"() => Counter.Count++\">+1</button>\n```\n\nAna opens `/counter` on her laptop and clicks **+1** three times. Then Bo opens `/counter` on his phone.\n\n**What does Bo see?**",
+      "options": [
+        "Clicks: 0",
+        "Clicks: 3",
+        "Clicks: 1",
+        "An error: a singleton can't be injected into a component"
+      ],
+      "correct": 1,
+      "explanation": "On the server, a **Singleton is one object for the whole app**, so every user shares it. Bo sees Ana's clicks: **Clicks: 3**. Here it is only a counter, but with a cart or a user name it is a data leak. Per-user state should be **Scoped** (one per circuit)."
+    },
+    {
+      "id": "B",
+      "title": "Scoped in Interactive Server",
+      "body": "Program.cs (the whole app is Interactive Server, set in `App.razor`):\n\n```csharp\nbuilder.Services.AddScoped<CartService>();\n```\n\n`/products` has an **Add** button that calls `Cart.Add(product)`. `/cart` shows `@Cart.Items.Count`. Both pages use `@inject CartService Cart`.\n\nIn one tab, you click **Add** once on `/products`, then click a link to `/cart`. After that, you open `/cart` in a **new tab**.\n\n**What do the two tabs show?**",
+      "options": [
+        "First tab: 1. New tab: 1",
+        "First tab: 0. New tab: 0",
+        "First tab: 1. New tab: 0",
+        "First tab: 0. New tab: 1"
+      ],
+      "correct": 2,
+      "explanation": "In Interactive Server, a Scoped service lives as long as the **circuit**. Navigating with a link inside the app keeps the same circuit, so the first tab still has the same `CartService`: **1**. A new tab opens a new circuit with a new instance: **0**. (To keep a cart across tabs, you need storage, like a database or browser storage.)"
+    },
+    {
+      "id": "C",
+      "title": "The missing client registration",
+      "body": "A Blazor Web App with Auto mode. `ITodoApi` is in the `.Client` project.\n\nServer `Program.cs`:\n\n```csharp\nbuilder.Services.AddScoped<ITodoApi, ServerTodoApi>();\n```\n\nClient `Program.cs`:\n\n```csharp\n// nothing registered for ITodoApi\n```\n\nTodos.razor (in the `.Client` project):\n\n```razor\n@page \"/todos\"\n@rendermode InteractiveAuto\n@inject ITodoApi Api\n```\n\nThe first visit works. A few visits later, when the WebAssembly files are downloaded and cached, you open `/todos` again.\n\n**What happens?**",
+      "options": [
+        "It still works: the browser calls the server's `ServerTodoApi`",
+        "The page shows, but the list is empty",
+        "An error: there is no registered service of type `ITodoApi`",
+        "A build error in the `.Client` project"
+      ],
+      "correct": 2,
+      "explanation": "With Auto, the first visit runs on the **server**, where `ITodoApi` is registered. Once WebAssembly is ready, the component runs **in the browser** and asks the **client** container, which has no registration. It fails with *Cannot provide a value for property 'Api'... There is no registered service of type 'ITodoApi'*. Register an implementation (like one that calls an API with `HttpClient`) in the client `Program.cs` too. The build doesn't catch it: it is a runtime error."
+    },
+    {
+      "id": "D",
+      "title": "Two transients",
+      "body": "Program.cs:\n\n```csharp\nbuilder.Services.AddTransient<IdService>();\n```\n\n```csharp\npublic class IdService\n{\n    public Guid Id { get; } = Guid.NewGuid();\n}\n```\n\nIds.razor:\n\n```razor\n@page \"/ids\"\n@inject IdService First\n@inject IdService Second\n\n<p>@(First.Id == Second.Id)</p>\n```\n\n**What does the page show?**",
+      "options": [
+        "True",
+        "False",
+        "An error: the same service is injected twice",
+        "It depends on the render mode"
+      ],
+      "correct": 1,
+      "explanation": "**Transient** means a **new instance for every injection**, so `First` and `Second` are two objects with two different `Guid`s: **False**. With `AddScoped` or `AddSingleton`, both properties would get the same instance and it would show **True**."
+    }
+  ],
+  "practice": [
+    {
+      "id": "e1",
+      "title": "Register a service",
+      "task": "You wrote `ICartService` and its class `CartService`. Each user must have their own cart.\n\nIn `Program.cs`, register `CartService` as the implementation of **`ICartService`**, with the right lifetime for per-user state, **before** `builder.Build()`.",
+      "starter": "// Program.cs\nvar builder = WebApplication.CreateBuilder(args);\n\nbuilder.Services.AddRazorComponents()\n    .AddInteractiveServerComponents();\n\n// register ICartService here\n\nvar app = builder.Build();",
+      "solution": "// Program.cs\nvar builder = WebApplication.CreateBuilder(args);\n\nbuilder.Services.AddRazorComponents()\n    .AddInteractiveServerComponents();\n\nbuilder.Services.AddScoped<ICartService, CartService>();\n\nvar app = builder.Build();",
+      "hint": "Per-user state on the server is **Scoped**. The interface goes first: `AddScoped<ICartService, CartService>()`.",
+      "checks": [
+        {
+          "id": "reg",
+          "label": "`builder.Services.AddScoped<ICartService, CartService>()`",
+          "pattern": "builder\\.Services\\.AddScoped\\s*<\\s*ICartService\\s*,\\s*CartService\\s*>\\s*\\(\\s*\\)\\s*;",
+          "hint": "Add `builder.Services.AddScoped<ICartService, CartService>();`."
+        },
+        {
+          "id": "before",
+          "label": "Registered before `builder.Build()`",
+          "pattern": "AddScoped\\s*<\\s*ICartService[\\s\\S]*builder\\.Build\\s*\\(\\s*\\)",
+          "hint": "Services must be registered before `var app = builder.Build();`."
+        },
+        {
+          "id": "nosingle",
+          "label": "Not a Singleton (that would share one cart with all users)",
+          "pattern": "AddSingleton\\s*<\\s*ICartService",
+          "mustNotMatch": true,
+          "hint": "A Singleton on the server is shared by every user. Use `AddScoped`."
+        }
+      ]
+    },
+    {
+      "id": "e2",
+      "title": "Inject it in a page",
+      "task": "Write the page **`/cart`**:\n\n1. Inject **`ICartService`** into a property called **`Cart`**.\n2. Inject **`NavigationManager`** into a property called **`Nav`**.\n3. Show `<p>@Cart.Items.Count items</p>`.\n4. A button that navigates to `/checkout`.",
+      "starter": "@page \"/cart\"\n@rendermode InteractiveServer\n\n",
+      "solution": "@page \"/cart\"\n@rendermode InteractiveServer\n@inject ICartService Cart\n@inject NavigationManager Nav\n\n<p>@Cart.Items.Count items</p>\n<button @onclick=\"@(() => Nav.NavigateTo(\"/checkout\"))\">Checkout</button>",
+      "hint": "The syntax is `@inject Type PropertyName`, one per line, at the top of the file.",
+      "checks": [
+        {
+          "id": "cart",
+          "label": "`@inject ICartService Cart`",
+          "pattern": "^\\s*@inject\\s+ICartService\\s+Cart\\s*$",
+          "hint": "Add the line `@inject ICartService Cart`."
+        },
+        {
+          "id": "nav",
+          "label": "`@inject NavigationManager Nav`",
+          "pattern": "^\\s*@inject\\s+NavigationManager\\s+Nav\\s*$",
+          "hint": "Add the line `@inject NavigationManager Nav`. It is built in, so there is nothing to register."
+        },
+        {
+          "id": "count",
+          "label": "Shows `@Cart.Items.Count`",
+          "pattern": "<p>\\s*@Cart\\.Items\\.Count\\s+items\\s*</p>",
+          "hint": "Write `<p>@Cart.Items.Count items</p>`."
+        },
+        {
+          "id": "go",
+          "label": "Calls `Nav.NavigateTo(\"/checkout\")`",
+          "pattern": "Nav\\.NavigateTo\\s*\\(\\s*[\\\"']/checkout[\\\"']",
+          "hint": "In the button: `@onclick=\"@(() => Nav.NavigateTo(\"/checkout\"))\"`."
+        }
+      ]
+    },
+    {
+      "id": "e3",
+      "title": "Inject in code-behind",
+      "task": "The markup moved to `Cart.razor`, and the C# is in `Cart.razor.cs`. The two properties below are never set, so `Cart` is `null` at runtime.\n\nMake the container fill **both** properties.",
+      "starter": "// Cart.razor.cs\nusing Microsoft.AspNetCore.Components;\n\nnamespace MyShop.Components.Pages;\n\npublic partial class Cart\n{\n    public ICartService CartService { get; set; } = default!;\n    public ILogger<Cart> Logger { get; set; } = default!;\n\n    protected override void OnInitialized()\n    {\n        Logger.LogInformation(\"Cart has {Count} items\", CartService.Items.Count);\n    }\n}",
+      "solution": "// Cart.razor.cs\nusing Microsoft.AspNetCore.Components;\n\nnamespace MyShop.Components.Pages;\n\npublic partial class Cart\n{\n    [Inject] public ICartService CartService { get; set; } = default!;\n    [Inject] public ILogger<Cart> Logger { get; set; } = default!;\n\n    protected override void OnInitialized()\n    {\n        Logger.LogInformation(\"Cart has {Count} items\", CartService.Items.Count);\n    }\n}",
+      "hint": "In C#, `@inject` becomes the **`[Inject]`** attribute on a property.",
+      "checks": [
+        {
+          "id": "svc",
+          "label": "`[Inject]` on `ICartService CartService`",
+          "pattern": "\\[Inject\\]\\s*(public|private|protected|internal)\\s+ICartService\\s+CartService\\s*\\{",
+          "hint": "Write `[Inject] public ICartService CartService { get; set; } = default!;`."
+        },
+        {
+          "id": "log",
+          "label": "`[Inject]` on `ILogger<Cart> Logger`",
+          "pattern": "\\[Inject\\]\\s*(public|private|protected|internal)\\s+ILogger\\s*<\\s*Cart\\s*>\\s+Logger\\s*\\{",
+          "hint": "`ILogger<T>` is built in. Add `[Inject]` before it too."
+        },
+        {
+          "id": "partial",
+          "label": "Still a `partial class Cart`",
+          "pattern": "public\\s+partial\\s+class\\s+Cart\\b",
+          "hint": "Keep `public partial class Cart`: it is the other half of `Cart.razor`."
+        },
+        {
+          "id": "noat",
+          "label": "No `@inject` in a `.cs` file",
+          "pattern": "@inject",
+          "mustNotMatch": true,
+          "hint": "`@inject` is Razor syntax. In C#, use `[Inject]`."
+        }
+      ]
+    },
+    {
+      "id": "e4",
+      "title": "Fix the data leak",
+      "task": "This app is Interactive Server. Users report they sometimes see **another user's name** in the header.\n\n- `UserSession` holds the current user's name and cart.\n- `IWeatherCache` holds a public weather forecast that is the same for everyone (and is thread-safe).\n\nFix the registrations: per-user state must not be shared, and the shared cache should stay shared.",
+      "starter": "// Program.cs\nbuilder.Services.AddSingleton<UserSession>();\nbuilder.Services.AddSingleton<IWeatherCache, WeatherCache>();",
+      "solution": "// Program.cs\nbuilder.Services.AddScoped<UserSession>();\nbuilder.Services.AddSingleton<IWeatherCache, WeatherCache>();",
+      "hint": "On the server, a Singleton is one object for **all users**. Which of the two holds per-user data?",
+      "checks": [
+        {
+          "id": "scoped",
+          "label": "`UserSession` is Scoped",
+          "pattern": "AddScoped\\s*<\\s*UserSession\\s*>\\s*\\(\\s*\\)",
+          "hint": "Use `builder.Services.AddScoped<UserSession>();`: one per circuit, so one per user and tab."
+        },
+        {
+          "id": "nosingle",
+          "label": "`UserSession` is no longer a Singleton",
+          "pattern": "AddSingleton\\s*<\\s*UserSession\\s*>",
+          "mustNotMatch": true,
+          "hint": "Remove `AddSingleton<UserSession>()`."
+        },
+        {
+          "id": "cache",
+          "label": "`IWeatherCache` stays a Singleton",
+          "pattern": "AddSingleton\\s*<\\s*IWeatherCache\\s*,\\s*WeatherCache\\s*>\\s*\\(\\s*\\)",
+          "hint": "Public, thread-safe data is fine as a Singleton. Keep `AddSingleton<IWeatherCache, WeatherCache>()`."
+        }
+      ]
+    },
+    {
+      "id": "e5",
+      "title": "Use a DbContext factory",
+      "task": "This Interactive Server page injects `AppDbContext` directly. The context lives as long as the circuit, and quick clicks throw *A second operation was started on this context instance*.\n\n`Program.cs` already calls `AddDbContextFactory<AppDbContext>(...)`. Change the page:\n\n1. Inject **`IDbContextFactory<AppDbContext>`** as **`DbFactory`**.\n2. In `OnInitializedAsync`, create a short-lived context with **`using var db = await DbFactory.CreateDbContextAsync();`** and load the products from it.",
+      "starter": "@page \"/products\"\n@rendermode InteractiveServer\n@inject AppDbContext Db\n\n<ul>\n    @foreach (var p in products)\n    {\n        <li>@p.Name</li>\n    }\n</ul>\n\n@code {\n    private List<Product> products = [];\n\n    protected override async Task OnInitializedAsync()\n    {\n        products = await Db.Products.ToListAsync();\n    }\n}",
+      "solution": "@page \"/products\"\n@rendermode InteractiveServer\n@inject IDbContextFactory<AppDbContext> DbFactory\n\n<ul>\n    @foreach (var p in products)\n    {\n        <li>@p.Name</li>\n    }\n</ul>\n\n@code {\n    private List<Product> products = [];\n\n    protected override async Task OnInitializedAsync()\n    {\n        using var db = await DbFactory.CreateDbContextAsync();\n        products = await db.Products.ToListAsync();\n    }\n}",
+      "hint": "The factory gives you a new context each time. `using` disposes it at the end of the method.",
+      "checks": [
+        {
+          "id": "inject",
+          "label": "`@inject IDbContextFactory<AppDbContext> DbFactory`",
+          "pattern": "^\\s*@inject\\s+IDbContextFactory\\s*<\\s*AppDbContext\\s*>\\s+DbFactory\\s*$",
+          "hint": "Replace the first `@inject` with `@inject IDbContextFactory<AppDbContext> DbFactory`."
+        },
+        {
+          "id": "nodb",
+          "label": "No `@inject AppDbContext` any more",
+          "pattern": "@inject\\s+AppDbContext\\b",
+          "mustNotMatch": true,
+          "hint": "Don't inject the context itself in an interactive server component."
+        },
+        {
+          "id": "create",
+          "label": "`using var db = await DbFactory.CreateDbContextAsync();`",
+          "pattern": "using\\s+(var|AppDbContext)\\s+(\\w+)\\s*=\\s*(await\\s+DbFactory\\.CreateDbContextAsync|DbFactory\\.CreateDbContext)\\s*\\(\\s*\\)\\s*;",
+          "hint": "Inside `OnInitializedAsync`: `using var db = await DbFactory.CreateDbContextAsync();`."
+        },
+        {
+          "id": "query",
+          "label": "Loads products from the new context",
+          "pattern": "products\\s*=\\s*await\\s+db\\.Products\\.ToListAsync\\s*\\(\\s*\\)",
+          "hint": "Write `products = await db.Products.ToListAsync();` (lowercase `db`, the new context)."
+        }
+      ]
+    },
+    {
+      "id": "e6",
+      "title": "Register for Auto, from scratch",
+      "task": "A Blazor Web App uses **Auto** mode. `ITodoApi` lives in the `.Client` project, with two implementations:\n\n- **`ServerTodoApi`** (server project) reads the database.\n- **`HttpTodoApi`** (`.Client` project) calls the server's API with `HttpClient`.\n\nIn the textbox, under each comment, write the registrations for each `Program.cs`:\n\n1. Server: `ITodoApi` → `ServerTodoApi`, **Scoped**.\n2. Client: an `HttpClient` (Scoped) whose `BaseAddress` is `builder.HostEnvironment.BaseAddress`.\n3. Client: `ITodoApi` → `HttpTodoApi`, **Scoped**.",
+      "starter": "// Server: Program.cs\n\n\n// Client: Program.cs\n",
+      "solution": "// Server: Program.cs\nbuilder.Services.AddScoped<ITodoApi, ServerTodoApi>();\n\n// Client: Program.cs\nbuilder.Services.AddScoped(sp =>\n    new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });\nbuilder.Services.AddScoped<ITodoApi, HttpTodoApi>();",
+      "hint": "Same interface, two containers, two implementations. The client's `HttpClient` registration uses a factory: `AddScoped(sp => new HttpClient { ... })`.",
+      "checks": [
+        {
+          "id": "server",
+          "label": "Server section: `AddScoped<ITodoApi, ServerTodoApi>()`",
+          "pattern": "//\\s*Server[^\\n]*\\n[\\s\\S]*?AddScoped\\s*<\\s*ITodoApi\\s*,\\s*ServerTodoApi\\s*>\\s*\\(\\s*\\)[\\s\\S]*//\\s*Client",
+          "hint": "Under `// Server: Program.cs`, write `builder.Services.AddScoped<ITodoApi, ServerTodoApi>();`."
+        },
+        {
+          "id": "http",
+          "label": "Client section: an `HttpClient` with `BaseAddress = new Uri(builder.HostEnvironment.BaseAddress)`",
+          "pattern": "//\\s*Client[\\s\\S]*AddScoped\\s*\\(\\s*\\w+\\s*=>\\s*new\\s+HttpClient\\s*(\\(\\s*\\))?\\s*\\{\\s*BaseAddress\\s*=\\s*new\\s+Uri\\s*\\(\\s*builder\\.HostEnvironment\\.BaseAddress\\s*\\)\\s*\\}\\s*\\)",
+          "hint": "Under `// Client`, write `builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });`."
+        },
+        {
+          "id": "client",
+          "label": "Client section: `AddScoped<ITodoApi, HttpTodoApi>()`",
+          "pattern": "//\\s*Client[\\s\\S]*AddScoped\\s*<\\s*ITodoApi\\s*,\\s*HttpTodoApi\\s*>\\s*\\(\\s*\\)",
+          "hint": "Under `// Client: Program.cs`, write `builder.Services.AddScoped<ITodoApi, HttpTodoApi>();`."
+        },
+        {
+          "id": "nosingle",
+          "label": "No Singleton for `ITodoApi`",
+          "pattern": "AddSingleton\\s*<\\s*ITodoApi",
+          "mustNotMatch": true,
+          "hint": "Use `AddScoped` in both projects."
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "q1",
+      "body": "In an **Interactive Server** app, which registration gives each circuit (each user's tab) its own instance, kept across clicks and navigations?",
+      "options": [
+        "`AddSingleton<CartService>()`",
+        "`AddScoped<CartService>()`",
+        "`AddTransient<CartService>()`",
+        "`AddHostedService<CartService>()`"
+      ],
+      "correct": 1,
+      "explanation": "On the server, a **scope** is a **circuit**. `AddScoped` gives one instance per circuit. Singleton is shared by all users, and Transient is new on every injection."
+    },
+    {
+      "id": "q2",
+      "body": "In a **WebAssembly** app, how does a service registered with `AddScoped` behave?",
+      "options": [
+        "A new instance on every page navigation",
+        "A new instance on every HTTP call",
+        "One instance per component",
+        "Like a singleton: one instance for the app running in that tab"
+      ],
+      "correct": 3,
+      "explanation": "WebAssembly has no circuits or requests to scope by. The app has one scope for its whole life in the tab, so Scoped acts like **Singleton**. Each tab still has its own app, so nothing is shared between users."
+    },
+    {
+      "id": "q3",
+      "body": "A page renders with **static SSR** (no interactivity) and injects a Scoped service. How long does that instance live?",
+      "options": [
+        "One HTTP request",
+        "Until the user closes the tab",
+        "Until the app restarts",
+        "Until the user logs out"
+      ],
+      "correct": 0,
+      "explanation": "Without interactivity there is no circuit. Each **HTTP request** has its own scope, so a Scoped service is created for the request and disposed when the response is done."
+    },
+    {
+      "id": "q4",
+      "body": "Which line correctly injects a logger into `Index.razor`?",
+      "options": [
+        "`@inject Logger = ILogger<Index>`",
+        "`@using ILogger<Index> Logger`",
+        "`@inject ILogger<Index> Logger`",
+        "`@inject Logger ILogger<Index>`"
+      ],
+      "correct": 2,
+      "explanation": "The syntax is **`@inject Type PropertyName`**. `ILogger<T>` is built in, so nothing needs to be registered."
+    },
+    {
+      "id": "q5",
+      "body": "An AI tool registered `AddSingleton<CurrentUser>()` in a Blazor Server app. `CurrentUser` stores the logged-in user's name. What is the problem?",
+      "options": [
+        "Nothing: Singleton is the fastest lifetime",
+        "Singletons can't be injected into components",
+        "Every user shares the same `CurrentUser`, so users can see each other's data",
+        "The name is lost on every click"
+      ],
+      "correct": 2,
+      "explanation": "On the server, a Singleton is **one object for the whole process**, shared by every circuit. Per-user state must be **Scoped**. This is a real data leak, not just a bug."
+    },
+    {
+      "id": "q6",
+      "body": "Why do the docs recommend `IDbContextFactory<T>` instead of injecting `DbContext` in **Blazor Server** components?",
+      "options": [
+        "A `DbContext` would live for the whole circuit, and it is not thread-safe, so overlapping queries fail",
+        "`DbContext` can't be registered in Blazor Server",
+        "The factory makes queries run in the browser",
+        "The factory caches the query results for all users"
+      ],
+      "correct": 0,
+      "explanation": "`AddDbContext` registers the context as Scoped, which on the server means **per circuit**: long-lived, tracking more and more entities, and failing when two operations overlap. A factory gives a **short-lived context per operation**, disposed with `using`."
+    },
+    {
+      "id": "q7",
+      "body": "A service registered with `AddTransient` implements `IDisposable`. It is injected into components in an Interactive Server app. When is each instance disposed?",
+      "options": [
+        "Right after the component renders",
+        "When the component is disposed",
+        "Never: transients are not disposed",
+        "When the scope ends, which is when the circuit ends"
+      ],
+      "correct": 3,
+      "explanation": "The container keeps transient disposables and disposes them when **their scope** ends. In Blazor Server that is the circuit, so they pile up in memory while the user stays. Use Scoped, a factory, or `OwningComponentBase`."
+    },
+    {
+      "id": "q8",
+      "body": "A component has `@inherits OwningComponentBase<IDraftService>`. What does it get?",
+      "options": [
+        "The circuit's shared `IDraftService`",
+        "A `Service` property from a new scope that is disposed with the component",
+        "A new `IDraftService` on every render",
+        "A singleton `IDraftService`"
+      ],
+      "correct": 1,
+      "explanation": "`OwningComponentBase<T>` creates a **scope for this component**. `Service` comes from that scope, and the scope (with its Scoped and transient services) is **disposed when the component is disposed**."
+    },
+    {
+      "id": "q9",
+      "body": "An `InteractiveAuto` page works on the first visit, but later fails with *There is no registered service of type 'ITodoApi'*. What is the most likely cause?",
+      "options": [
+        "`ITodoApi` is registered only in the **server** `Program.cs`, not in the `.Client` one",
+        "`ITodoApi` should be a Singleton",
+        "The page is missing `@using`",
+        "`@inject` doesn't work in Auto mode"
+      ],
+      "correct": 0,
+      "explanation": "Later visits run in **WebAssembly**, which uses the **client** container. Register an implementation (often an `HttpClient`-based one) in the `.Client` `Program.cs` too."
+    },
+    {
+      "id": "q10",
+      "body": "Which service is **not** available by default in a server-side Blazor app, so you must register it before you inject it?",
+      "options": [
+        "`NavigationManager`",
+        "`IJSRuntime`",
+        "`ILogger<T>`",
+        "`HttpClient`"
+      ],
+      "correct": 3,
+      "explanation": "`NavigationManager`, `IJSRuntime` and `ILogger<T>` are built in. `HttpClient` is registered by the WebAssembly template in the `.Client` project, but on the server you add it yourself, usually with `builder.Services.AddHttpClient()`."
+    }
+  ],
+  "quizPassPercent": 80,
+  "interview": [
+    {
+      "id": "i1",
+      "question": "What is dependency injection, and how do you use it in Blazor?",
+      "modelAnswer": "A class asks for its dependencies instead of creating them, and a container provides them. In Blazor you register services in `Program.cs` (for example `AddScoped<IService, Impl>()`), then inject them with `@inject` in markup or `[Inject]` in code-behind."
+    },
+    {
+      "id": "i2",
+      "question": "What are the three service lifetimes?",
+      "modelAnswer": "Singleton: one instance for the whole app. Scoped: one instance per scope. Transient: a new instance every time it is injected."
+    },
+    {
+      "id": "i3",
+      "question": "What does Scoped mean in Blazor?",
+      "modelAnswer": "It depends on where the code runs. In static SSR, a scope is one HTTP request. In Interactive Server, it is one circuit, so one user's tab. In WebAssembly, it is the app in the tab, so Scoped acts like a singleton."
+    },
+    {
+      "id": "i4",
+      "question": "Why is a Singleton with user data dangerous in Blazor Server?",
+      "modelAnswer": "On the server one Singleton instance is shared by every user and circuit, so one user can see another user's data. It must also be thread-safe. Per-user state should be Scoped."
+    },
+    {
+      "id": "i5",
+      "question": "How do you use Entity Framework Core in a Blazor Server component?",
+      "modelAnswer": "Register `AddDbContextFactory`, inject `IDbContextFactory<T>`, and create a short-lived context per operation with `using var db = await factory.CreateDbContextAsync()`. Injecting `DbContext` directly makes it live for the whole circuit, and it is not thread-safe."
+    },
+    {
+      "id": "i6",
+      "question": "What is `OwningComponentBase` for?",
+      "modelAnswer": "It gives a component its own DI scope, so Scoped and transient services live only as long as the component. `OwningComponentBase<T>` exposes the service as `Service`; the base version exposes `ScopedServices`. The scope is disposed with the component."
+    },
+    {
+      "id": "i7",
+      "question": "What must you do with services for components that use Auto or WebAssembly render modes?",
+      "modelAnswer": "Register them in the `.Client` `Program.cs` too, because in the browser the component uses the client container. Often the interface lives in the client project, with a server implementation that reads the database and a client implementation that calls an API."
+    },
+    {
+      "id": "i8",
+      "question": "What is the problem with transient services that implement `IDisposable` in Blazor Server?",
+      "modelAnswer": "The container keeps them and disposes them only when the scope ends, which is when the circuit ends. So they stay in memory while the user is connected. Use Scoped, a factory, or `OwningComponentBase` instead."
+    }
+  ]
+}

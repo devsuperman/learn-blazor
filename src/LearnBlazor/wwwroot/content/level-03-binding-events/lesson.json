@@ -1,0 +1,441 @@
+{
+  "id": "level-03-binding-events",
+  "number": 3,
+  "title": "Data binding and events",
+  "summary": "@bind, @onclick, EventCallback, and when the UI re-renders.",
+  "predict": [
+    {
+      "id": "A",
+      "title": "One-way value",
+      "body": "The page (interactive):\n\n```razor\n<input value=\"@name\" />\n<p>Hello, @name!</p>\n\n@code {\n    private string name = \"Ana\";\n}\n```\n\nThe user deletes the text, types **Bo**, and presses Tab.\n\n**What does the paragraph show?**",
+      "options": [
+        "Hello, Bo!",
+        "Hello, Ana!",
+        "Hello, !",
+        "An error: `value` can't be set from C#"
+      ],
+      "correct": 1,
+      "explanation": "**Hello, Ana!** `value=\"@name\"` is **one-way**: it writes `name` into the input, but nothing listens to the input's events, so the field never changes. The box shows **Bo**, the field is still **Ana**. Use `@bind=\"name\"` for two-way binding."
+    },
+    {
+      "id": "B",
+      "title": "Default bind event",
+      "body": "The page (interactive):\n\n```razor\n<input @bind=\"city\" />\n<p>City: @city</p>\n\n@code {\n    private string city = \"\";\n}\n```\n\nThe user clicks in the input and types **Rome**. The cursor is still in the input.\n\n**What does the paragraph show right now?**",
+      "options": [
+        "City: R",
+        "City: Rome",
+        "City: (nothing yet)",
+        "City: Rome, updated after each key"
+      ],
+      "correct": 2,
+      "explanation": "`@bind` on an input updates the field on **`onchange`**, which fires when the input **loses focus** (or on Enter). While the user is still typing, `city` is still empty. After Tab, it shows **City: Rome**. Add `@bind:event=\"oninput\"` to update on every key."
+    },
+    {
+      "id": "C",
+      "title": "Action instead of EventCallback",
+      "body": "AddButton.razor:\n\n```razor\n<button @onclick=\"() => OnAdd?.Invoke()\">Add</button>\n\n@code {\n    [Parameter] public Action? OnAdd { get; set; }\n}\n```\n\nThe page (interactive):\n\n```razor\n<p>Count: @count</p>\n<AddButton OnAdd=\"() => count++\" />\n\n@code {\n    private int count;\n}\n```\n\n**The user clicks Add once. What does the page show?**",
+      "options": [
+        "Count: 1",
+        "Count: 0",
+        "An error: a lambda can't be passed to a parameter",
+        "Count: 2, because the child and the page both re-render"
+      ],
+      "correct": 1,
+      "explanation": "**Count: 0.** The lambda runs and `count` becomes 1, but the event happened in the **child**, so only the child re-renders. A plain `Action` doesn't tell the page to render. Change the parameter to **`EventCallback`** and call `OnAdd.InvokeAsync()`: then Blazor re-renders the page automatically, and it shows **Count: 1**."
+    },
+    {
+      "id": "D",
+      "title": "An async handler",
+      "body": "The page (interactive):\n\n```razor\n<button @onclick=\"LoadAsync\">Load</button>\n<p>@status</p>\n\n@code {\n    private string status = \"Idle\";\n\n    private async Task LoadAsync()\n    {\n        status = \"Loading...\";\n        await Task.Delay(2000);\n        status = \"Done\";\n    }\n}\n```\n\n**What does the user see after clicking Load?**",
+      "options": [
+        "**Idle** for 2 seconds, then **Done**",
+        "**Done** right away",
+        "**Loading...**, then **Done** after 2 seconds",
+        "**Loading...** forever, unless `StateHasChanged()` is called"
+      ],
+      "correct": 2,
+      "explanation": "For an `async Task` handler, Blazor re-renders when the handler **first awaits** (so **Loading...** shows) and **again when the task completes** (so **Done** shows). No `StateHasChanged()` is needed. With `async void`, Blazor couldn't wait for the end, and the second render would be missing."
+    }
+  ],
+  "practice": [
+    {
+      "id": "e1",
+      "title": "Make it two-way",
+      "task": "Typing in this input doesn't update the greeting. Fix it:\n\n1. Bind the input to **`name`** in **both** directions.\n2. Update `name` on **every key**, not when the input loses focus.",
+      "starter": "<input value=\"@name\" />\n<p>Hello, @name!</p>\n\n@code {\n    private string name = \"\";\n}",
+      "solution": "<input @bind=\"name\" @bind:event=\"oninput\" />\n<p>Hello, @name!</p>\n\n@code {\n    private string name = \"\";\n}",
+      "hint": "Replace `value=\"@name\"` with `@bind`, then choose the event with `@bind:event`.",
+      "checks": [
+        {
+          "id": "bind",
+          "label": "The input uses `@bind=\"name\"`",
+          "pattern": "<input[^>]*@bind(-value)?\\s*=\\s*[\\\"']@?name[\\\"']",
+          "hint": "Write `<input @bind=\"name\" ... />`."
+        },
+        {
+          "id": "event",
+          "label": "It updates on every key (`@bind:event=\"oninput\"`)",
+          "pattern": "@bind(-value)?:event\\s*=\\s*[\\\"']oninput[\\\"']",
+          "hint": "Add `@bind:event=\"oninput\"` to the input."
+        },
+        {
+          "id": "oneway",
+          "label": "The one-way `value=\"@name\"` is gone",
+          "pattern": "\\bvalue\\s*=\\s*[\\\"']@name[\\\"']",
+          "mustNotMatch": true,
+          "hint": "Remove `value=\"@name\"`: `@bind` sets the value for you."
+        }
+      ]
+    },
+    {
+      "id": "e2",
+      "title": "Wire up the buttons",
+      "task": "Add click handlers:\n\n1. **+1** calls the method **`Increment`** (pass the method itself, no parentheses).\n2. **+5** calls **`Add(5)`** with a **lambda**.\n3. Write `Increment`, which adds 1 to `count`.",
+      "starter": "<p>Count: @count</p>\n<button>+1</button>\n<button>+5</button>\n\n@code {\n    private int count;\n\n    private void Add(int n) => count += n;\n}",
+      "solution": "<p>Count: @count</p>\n<button @onclick=\"Increment\">+1</button>\n<button @onclick=\"() => Add(5)\">+5</button>\n\n@code {\n    private int count;\n\n    private void Increment() => count++;\n\n    private void Add(int n) => count += n;\n}",
+      "hint": "A method group is `@onclick=\"Increment\"`. A lambda is `@onclick=\"() => Add(5)\"`.",
+      "checks": [
+        {
+          "id": "group",
+          "label": "+1 uses `@onclick=\"Increment\"`",
+          "pattern": "@onclick\\s*=\\s*[\\\"']@?Increment[\\\"']",
+          "hint": "Write `<button @onclick=\"Increment\">+1</button>`."
+        },
+        {
+          "id": "lambda",
+          "label": "+5 uses a lambda `() => Add(5)`",
+          "pattern": "@onclick\\s*=\\s*[\\\"']@?\\(?\\s*\\(\\s*\\)\\s*=>\\s*Add\\s*\\(\\s*5\\s*\\)\\s*\\)?[\\\"']",
+          "hint": "Write `<button @onclick=\"() => Add(5)\">+5</button>`."
+        },
+        {
+          "id": "method",
+          "label": "An `Increment` method adds 1 to `count`",
+          "pattern": "void\\s+Increment\\s*\\(\\s*\\)\\s*(=>\\s*(count\\s*\\+\\+|\\+\\+\\s*count|count\\s*\\+=\\s*1)|\\{[^}]*(count\\s*\\+\\+|\\+\\+\\s*count|count\\s*\\+=\\s*1))",
+          "hint": "Add `private void Increment() => count++;` to `@code`."
+        },
+        {
+          "id": "call",
+          "label": "No call during render (`@onclick=\"Increment()\"`)",
+          "pattern": "@onclick\\s*=\\s*[\\\"']@?Increment\\s*\\(",
+          "mustNotMatch": true,
+          "hint": "Remove the parentheses: pass `Increment`, don't call it."
+        }
+      ]
+    },
+    {
+      "id": "e3",
+      "title": "Fix the double onchange",
+      "task": "An AI tool wrote this search box. It doesn't build, because `@bind` already uses `onchange`.\n\nFix it:\n\n1. Keep `@bind=\"search\"`, and update on every key.\n2. Run **`Filter`** after the value changes, with **`@bind:after`**.\n3. Remove `@onchange`.",
+      "starter": "<input @bind=\"search\" @onchange=\"Filter\" />\n<p>@results.Count results</p>\n\n@code {\n    private string search = \"\";\n    private List<string> results = [];\n\n    private void Filter()\n    {\n        results = AllNames.Where(n => n.Contains(search)).ToList();\n    }\n}",
+      "solution": "<input @bind=\"search\" @bind:event=\"oninput\" @bind:after=\"Filter\" />\n<p>@results.Count results</p>\n\n@code {\n    private string search = \"\";\n    private List<string> results = [];\n\n    private void Filter()\n    {\n        results = AllNames.Where(n => n.Contains(search)).ToList();\n    }\n}",
+      "hint": "`@bind:after=\"Filter\"` runs `Filter` after `search` is updated.",
+      "checks": [
+        {
+          "id": "bind",
+          "label": "Still `@bind=\"search\"`",
+          "pattern": "@bind\\s*=\\s*[\\\"']@?search[\\\"']",
+          "hint": "Keep `@bind=\"search\"` on the input."
+        },
+        {
+          "id": "event",
+          "label": "Updates on every key (`@bind:event=\"oninput\"`)",
+          "pattern": "@bind:event\\s*=\\s*[\\\"']oninput[\\\"']",
+          "hint": "Add `@bind:event=\"oninput\"`."
+        },
+        {
+          "id": "after",
+          "label": "Runs `Filter` with `@bind:after=\"Filter\"`",
+          "pattern": "@bind:after\\s*=\\s*[\\\"']@?Filter[\\\"']",
+          "hint": "Add `@bind:after=\"Filter\"`."
+        },
+        {
+          "id": "noonchange",
+          "label": "No `@onchange` on the input",
+          "pattern": "@onchange\\b",
+          "mustNotMatch": true,
+          "hint": "Remove `@onchange=\"Filter\"`: `@bind` and `@onchange` can't share an element."
+        }
+      ]
+    },
+    {
+      "id": "e4",
+      "title": "Press Enter to add",
+      "task": "Add an item when the user presses **Enter** in the input:\n\n1. Add **`@onkeydown=\"OnKeyDown\"`** to the input.\n2. Write **`OnKeyDown`** with a **`KeyboardEventArgs`** parameter.\n3. If the key is **`\"Enter\"`**, call `Add()`.",
+      "starter": "<input @bind=\"newItem\" @bind:event=\"oninput\" />\n<ul>\n    @foreach (var item in items)\n    {\n        <li>@item</li>\n    }\n</ul>\n\n@code {\n    private string newItem = \"\";\n    private List<string> items = [];\n\n    private void Add()\n    {\n        items.Add(newItem);\n        newItem = \"\";\n    }\n}",
+      "solution": "<input @bind=\"newItem\" @bind:event=\"oninput\" @onkeydown=\"OnKeyDown\" />\n<ul>\n    @foreach (var item in items)\n    {\n        <li>@item</li>\n    }\n</ul>\n\n@code {\n    private string newItem = \"\";\n    private List<string> items = [];\n\n    private void OnKeyDown(KeyboardEventArgs e)\n    {\n        if (e.Key == \"Enter\")\n        {\n            Add();\n        }\n    }\n\n    private void Add()\n    {\n        items.Add(newItem);\n        newItem = \"\";\n    }\n}",
+      "hint": "Inside the handler, `e.Key` holds the key name, like `\"Enter\"`.",
+      "checks": [
+        {
+          "id": "attr",
+          "label": "The input has `@onkeydown=\"OnKeyDown\"`",
+          "pattern": "<input[^>]*@onkeydown\\s*=\\s*[\\\"']@?OnKeyDown[\\\"']",
+          "hint": "Add `@onkeydown=\"OnKeyDown\"` to the `<input>`."
+        },
+        {
+          "id": "args",
+          "label": "`OnKeyDown` takes a `KeyboardEventArgs`",
+          "pattern": "\\bOnKeyDown\\s*\\(\\s*KeyboardEventArgs\\s+\\w+\\s*\\)",
+          "hint": "Declare `private void OnKeyDown(KeyboardEventArgs e)`."
+        },
+        {
+          "id": "enter",
+          "label": "It checks for the `\"Enter\"` key",
+          "pattern": "\\.Key\\s*==\\s*\\\"Enter\\\"|\\\"Enter\\\"\\s*==\\s*\\w+\\.Key|\\.Key\\s+is\\s+\\\"Enter\\\"",
+          "hint": "Write `if (e.Key == \"Enter\") Add();`."
+        },
+        {
+          "id": "add",
+          "label": "It calls `Add()`",
+          "pattern": "\\bOnKeyDown\\s*\\([^)]*\\)[\\s\\S]*?\\bAdd\\s*\\(\\s*\\)\\s*;",
+          "hint": "Call `Add();` inside `OnKeyDown` when the key is Enter."
+        }
+      ]
+    },
+    {
+      "id": "e5",
+      "title": "Make the stepper bindable",
+      "task": "The page wants to write `<Stepper @bind-Value=\"quantity\" />`. Right now the stepper changes its own parameter. Fix it:\n\n1. Add a parameter **`ValueChanged`** of type **`EventCallback<int>`**.\n2. The buttons call **`Change(1)`** and **`Change(-1)`**.\n3. `Change` sends `Value + delta` to the parent with **`ValueChanged.InvokeAsync`**.\n4. Never assign `Value` inside the component.",
+      "starter": "@* Stepper.razor *@\n<button @onclick=\"() => Value--\">-</button>\n<span>@Value</span>\n<button @onclick=\"() => Value++\">+</button>\n\n@code {\n    [Parameter] public int Value { get; set; }\n}",
+      "solution": "@* Stepper.razor *@\n<button @onclick=\"() => Change(-1)\">-</button>\n<span>@Value</span>\n<button @onclick=\"() => Change(1)\">+</button>\n\n@code {\n    [Parameter] public int Value { get; set; }\n    [Parameter] public EventCallback<int> ValueChanged { get; set; }\n\n    private async Task Change(int delta)\n    {\n        await ValueChanged.InvokeAsync(Value + delta);\n    }\n}",
+      "hint": "`@bind-Value` needs a `Value` parameter and an `EventCallback<int>` parameter named exactly `ValueChanged`.",
+      "checks": [
+        {
+          "id": "cb",
+          "label": "A `[Parameter] public EventCallback<int> ValueChanged`",
+          "pattern": "\\[Parameter\\]\\s*public\\s+EventCallback<int>\\s+ValueChanged\\b",
+          "hint": "Add `[Parameter] public EventCallback<int> ValueChanged { get; set; }`."
+        },
+        {
+          "id": "invoke",
+          "label": "Calls `ValueChanged.InvokeAsync(Value + delta)`",
+          "pattern": "ValueChanged\\.InvokeAsync\\s*\\(\\s*Value\\s*\\+\\s*\\w+\\s*\\)",
+          "hint": "Inside `Change`, write `await ValueChanged.InvokeAsync(Value + delta);`."
+        },
+        {
+          "id": "buttons",
+          "label": "The buttons call `Change(1)` and `Change(-1)`",
+          "pattern": "Change\\s*\\(\\s*-\\s*1\\s*\\)[\\s\\S]*Change\\s*\\(\\s*\\+?1\\s*\\)|Change\\s*\\(\\s*\\+?1\\s*\\)[\\s\\S]*Change\\s*\\(\\s*-\\s*1\\s*\\)",
+          "hint": "Use `@onclick=\"() => Change(-1)\"` and `@onclick=\"() => Change(1)\"`."
+        },
+        {
+          "id": "nowrite",
+          "label": "`Value` is never assigned in the component",
+          "pattern": "\\bValue\\s*(\\+\\+|--|[+\\-]?=(?!=))|(\\+\\+|--)\\s*Value\\b",
+          "mustNotMatch": true,
+          "hint": "Don't change `Value`. Send the new value with `ValueChanged.InvokeAsync`."
+        }
+      ]
+    },
+    {
+      "id": "e6",
+      "title": "A bindable search box, from scratch",
+      "task": "Write **`SearchBox.razor`** so a parent can use `<SearchBox @bind-Text=\"query\" />`:\n\n- A `string` parameter **`Text`**.\n- An **`EventCallback<string>`** parameter **`TextChanged`**.\n- An `<input>` that shows `Text` with **`@bind:get`**, sends new values with **`@bind:set`**, and updates on **every key**.\n- The new value must reach the parent through `TextChanged` (you can pass `TextChanged` to `@bind:set` directly, or write a method that calls `TextChanged.InvokeAsync`).",
+      "starter": "@* SearchBox.razor *@\n\n",
+      "solution": "@* SearchBox.razor *@\n<input @bind:get=\"Text\" @bind:set=\"OnTextChanged\" @bind:event=\"oninput\" />\n\n@code {\n    [Parameter] public string Text { get; set; } = \"\";\n    [Parameter] public EventCallback<string> TextChanged { get; set; }\n\n    private async Task OnTextChanged(string value)\n    {\n        await TextChanged.InvokeAsync(value);\n    }\n}",
+      "hint": "`@bind-Text` on the parent needs `Text` and `TextChanged`. Inside, `<input @bind:get=\"Text\" @bind:set=\"...\" @bind:event=\"oninput\" />`.",
+      "checks": [
+        {
+          "id": "text",
+          "label": "A `[Parameter] public string Text` property",
+          "pattern": "\\[Parameter[^\\]]*\\]\\s*public\\s+string\\??\\s+Text\\b",
+          "hint": "Add `[Parameter] public string Text { get; set; } = \"\";`."
+        },
+        {
+          "id": "cb",
+          "label": "A `[Parameter] public EventCallback<string> TextChanged`",
+          "pattern": "\\[Parameter[^\\]]*\\]\\s*public\\s+EventCallback<string\\??>\\s+TextChanged\\b",
+          "hint": "Add `[Parameter] public EventCallback<string> TextChanged { get; set; }`."
+        },
+        {
+          "id": "get",
+          "label": "The input uses `@bind:get=\"Text\"`",
+          "pattern": "<input[^>]*@bind:get\\s*=\\s*[\\\"']@?Text[\\\"']",
+          "hint": "Add `@bind:get=\"Text\"` to the `<input>`."
+        },
+        {
+          "id": "set",
+          "label": "The input uses `@bind:set`",
+          "pattern": "<input[^>]*@bind:set\\s*=\\s*[\\\"']@?\\w+[\\\"']",
+          "hint": "Add `@bind:set=\"OnTextChanged\"` (or `@bind:set=\"TextChanged\"`)."
+        },
+        {
+          "id": "event",
+          "label": "Updates on every key (`@bind:event=\"oninput\"`)",
+          "pattern": "@bind:event\\s*=\\s*[\\\"']oninput[\\\"']",
+          "hint": "Add `@bind:event=\"oninput\"`."
+        },
+        {
+          "id": "parent",
+          "label": "The value goes to the parent through `TextChanged`",
+          "pattern": "TextChanged\\.InvokeAsync\\s*\\(|@bind:set\\s*=\\s*[\\\"']@?TextChanged[\\\"']",
+          "hint": "Call `await TextChanged.InvokeAsync(value);` in your set method, or write `@bind:set=\"TextChanged\"`."
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "q1",
+      "body": "An input has `@bind=\"email\"` and nothing else. When is the field `email` updated?",
+      "options": [
+        "On every key the user presses",
+        "Only when the form is submitted",
+        "When the input raises `onchange`: it loses focus or the user presses Enter",
+        "Every 500 ms while the user types"
+      ],
+      "correct": 2,
+      "explanation": "For an `<input>`, `@bind` listens to **`onchange`** by default. Add `@bind:event=\"oninput\"` to update on every key."
+    },
+    {
+      "id": "q2",
+      "body": "`Save` is a `void` method. What is wrong with `<button @onclick=\"Save()\">Save</button>`?",
+      "options": [
+        "It calls `Save` while rendering instead of passing it as the handler, so it doesn't build",
+        "Nothing: it's the normal way to write a handler",
+        "It works, but the page won't re-render after the click",
+        "It only works with `@rendermode InteractiveWebAssembly`"
+      ],
+      "correct": 0,
+      "explanation": "`@onclick=\"Save()\"` is the **result** of calling `Save`, and a `void` result can't be a handler. Pass the method group `@onclick=\"Save\"`, or a lambda `@onclick=\"() => Save()\"`."
+    },
+    {
+      "id": "q3",
+      "body": "AI code has `<input @bind=\"search\" @onchange=\"Filter\" />`. What happens, and what is the fix?",
+      "options": [
+        "It works: `Filter` runs before the field is updated",
+        "It works: `Filter` runs after the field is updated",
+        "`Filter` never runs, but there's no error",
+        "It doesn't build because `onchange` is used twice; use `@bind:after=\"Filter\"`"
+      ],
+      "correct": 3,
+      "explanation": "`@bind` already writes an `onchange` handler, so adding `@onchange` sets the same attribute twice, which is a **build error**. `@bind:after=\"Filter\"` runs `Filter` after the value is stored."
+    },
+    {
+      "id": "q4",
+      "body": "A child calls the parent through a parameter. Which parameter type makes Blazor **re-render the parent** automatically?",
+      "options": [
+        "`Action`",
+        "`EventCallback`",
+        "`Func<Task>`",
+        "`Delegate`"
+      ],
+      "correct": 1,
+      "explanation": "When an **`EventCallback`** is invoked, Blazor runs the handler and then re-renders the component that owns it (the parent). With `Action` or `Func`, the method runs, but the parent isn't re-rendered."
+    },
+    {
+      "id": "q5",
+      "body": "A parent writes `<ColorPicker @bind-Color=\"theme\" />`. What must `ColorPicker` have?",
+      "options": [
+        "A `[Parameter] Color` and an `[Parameter] EventCallback<T> ColorChanged`",
+        "A `[Parameter] Color` and an `[Parameter] Action<T> OnColor`",
+        "Only a `[Parameter] Color`; Blazor tracks changes itself",
+        "A `[Bindable]` attribute on the class"
+      ],
+      "correct": 0,
+      "explanation": "`@bind-Color` expands to `Color=\"theme\"` plus `ColorChanged=\"...\"`. The child needs **`Color`** and an **`EventCallback<T>` named `ColorChanged`**, and calls `ColorChanged.InvokeAsync(newValue)`."
+    },
+    {
+      "id": "q6",
+      "body": "In `void OnPick(ChangeEventArgs e)`, what is the type of `e.Value`?",
+      "options": [
+        "`string`",
+        "`int`",
+        "`JsonElement`",
+        "`object?`"
+      ],
+      "correct": 3,
+      "explanation": "`ChangeEventArgs.Value` is an **`object?`**. Convert it, for example `e.Value?.ToString()`, or parse it for a number."
+    },
+    {
+      "id": "q7",
+      "body": "In which case do you really need to call `StateHasChanged()`?",
+      "options": [
+        "At the end of every `@onclick` handler",
+        "After a `@bind` value changes",
+        "When a `System.Threading.Timer` callback changes a field the component shows",
+        "In `OnInitialized`, so the first render happens"
+      ],
+      "correct": 2,
+      "explanation": "Blazor re-renders after its **own** events and when parameters are set. A timer or service event happens **outside** that, so you call `StateHasChanged()` yourself, through `InvokeAsync(StateHasChanged)` when you're on another thread."
+    },
+    {
+      "id": "q8",
+      "body": "```razor\n<div @onclick=\"SelectRow\">\n    @row.Name\n    <button @onclick=\"() => Delete(row)\">Delete</button>\n</div>\n```\n\nClicking **Delete** also selects the row. How do you stop that?",
+      "options": [
+        "Add `@onclick:preventDefault` to the button",
+        "Add `@onclick:stopPropagation` to the button",
+        "Make `Delete` an `async Task`",
+        "Add `@onclick:stopPropagation` to the `<div>`"
+      ],
+      "correct": 1,
+      "explanation": "The click **bubbles** from the button up to the `div`. `@onclick:stopPropagation` on the **button** stops it there. `preventDefault` only blocks the browser's default action, which a plain button doesn't have."
+    },
+    {
+      "id": "q9",
+      "body": "In a Blazor Web App, a page has a button with `@onclick=\"Increment\"`. Clicking it does nothing and there's no error. What is the most likely cause?",
+      "options": [
+        "`Increment` must be `async`",
+        "The page needs `@bind`",
+        "`Increment` must call `StateHasChanged()`",
+        "The page has no interactive render mode, so it's rendered with static SSR"
+      ],
+      "correct": 3,
+      "explanation": "Without a `@rendermode` (or global interactivity), the page is **static SSR**: the HTML is sent, but no event handlers are connected. Add `@rendermode InteractiveServer` (or another interactive mode)."
+    },
+    {
+      "id": "q10",
+      "body": "A handler is `async Task`: it sets `loading = true`, awaits an HTTP call, then sets `loading = false`. When does Blazor re-render?",
+      "options": [
+        "Only once, at the end",
+        "Only if you call `StateHasChanged()`",
+        "When the handler first awaits, and again when it completes",
+        "Before the handler starts, and never after"
+      ],
+      "correct": 2,
+      "explanation": "Blazor renders when the task is **not yet complete** (at the first `await`), so `loading = true` shows, and again when the task **completes**. That's why a spinner works without `StateHasChanged()`."
+    }
+  ],
+  "quizPassPercent": 80,
+  "interview": [
+    {
+      "id": "i1",
+      "question": "What does `@bind` do?",
+      "modelAnswer": "It binds a value in both directions: it writes the field into the element, and updates the field when the element raises an event. For an input, the default event is `onchange` (blur or Enter). It's a shortcut for `value` plus an `onchange` handler."
+    },
+    {
+      "id": "i2",
+      "question": "What is the difference between `@bind` and `@bind:event=\"oninput\"`?",
+      "modelAnswer": "Plain `@bind` updates the field on `onchange`, when the input loses focus. With `@bind:event=\"oninput\"`, it updates on every key. Use `oninput` for live search or counters, and `@bind:after` to run code after each update."
+    },
+    {
+      "id": "i3",
+      "question": "How do you make your own component work with `@bind-Value`?",
+      "modelAnswer": "Give it a `[Parameter] Value` and a `[Parameter] EventCallback<T> ValueChanged`. When the value should change, the component calls `ValueChanged.InvokeAsync(newValue)` instead of setting `Value`. The parent stores the new value and passes it back down."
+    },
+    {
+      "id": "i4",
+      "question": "What is the difference between `EventCallback` and `Action` for a parameter?",
+      "modelAnswer": "Both let a child call the parent. `EventCallback` also re-renders the component that owns the handler, supports async handlers, and is a struct that's never null. With `Action`, the parent's method runs but its UI is not updated."
+    },
+    {
+      "id": "i5",
+      "question": "When does a Blazor component re-render?",
+      "modelAnswer": "After one of its event handlers runs (and again after an async handler completes), when its parent re-renders and sets its parameters, and when `StateHasChanged()` is called. `ShouldRender()` can return false to skip renders after the first one."
+    },
+    {
+      "id": "i6",
+      "question": "When do you need to call `StateHasChanged()`?",
+      "modelAnswer": "When the state changes outside Blazor's own events: a timer, a service event, a background task. From another thread, use `InvokeAsync(StateHasChanged)`. You don't need it at the end of a normal event handler."
+    },
+    {
+      "id": "i7",
+      "question": "What do `@onclick:preventDefault` and `@onclick:stopPropagation` do?",
+      "modelAnswer": "`preventDefault` blocks the browser's default action, like following a link or submitting a form, while your handler still runs. `stopPropagation` stops the event from bubbling to parent elements, so their handlers don't run."
+    },
+    {
+      "id": "i8",
+      "question": "A button's `@onclick` does nothing and there's no error. What do you check?",
+      "modelAnswer": "First the render mode: in a Blazor Web App, a page without an interactive render mode is static SSR, and events are not connected. Then check that the handler is passed as `Increment` or a lambda, not called as `Increment()`."
+    }
+  ]
+}
