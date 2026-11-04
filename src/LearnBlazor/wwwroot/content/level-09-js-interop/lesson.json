@@ -1,0 +1,459 @@
+{
+  "id": "level-09-js-interop",
+  "number": 9,
+  "title": "JavaScript interop",
+  "summary": "IJSRuntime, JS modules, and calling .NET from JavaScript.",
+  "predict": [
+    {
+      "id": "A",
+      "title": "Local storage on load",
+      "body": "Theme.razor, in a Blazor Web App with `@rendermode InteractiveServer` (prerendering is on by default):\n\n```razor\n@inject IJSRuntime JS\n\n<p>Theme: @theme</p>\n\n@code {\n    private string? theme;\n\n    protected override async Task OnInitializedAsync()\n    {\n        theme = await JS.InvokeAsync<string?>(\"localStorage.getItem\", \"theme\");\n    }\n}\n```\n\n**What happens when you open the page?**",
+      "options": [
+        "It shows the saved theme",
+        "It shows **Theme:** with nothing after it, with no error",
+        "An `InvalidOperationException`: JavaScript interop calls cannot be issued at this time",
+        "A build error: `IJSRuntime` can't be used in `OnInitializedAsync`"
+      ],
+      "correct": 2,
+      "explanation": "With prerendering, `OnInitializedAsync` first runs **on the server** to build HTML. There is no browser yet, so the JS call throws *JavaScript interop calls cannot be issued at this time... can only be performed during the OnAfterRenderAsync lifecycle method*. Move the call to `OnAfterRenderAsync` with `if (firstRender)`, then call `StateHasChanged()`. It builds fine: the compiler can't know when the code runs."
+    },
+    {
+      "id": "B",
+      "title": "A call from JavaScript",
+      "body": "Width.razor (interactive):\n\n```razor\n@implements IDisposable\n@inject IJSRuntime JS\n\n<p>Width: @width</p>\n\n@code {\n    private DotNetObjectReference<Width>? objRef;\n    private int width;\n\n    protected override async Task OnAfterRenderAsync(bool firstRender)\n    {\n        if (firstRender)\n        {\n            objRef = DotNetObjectReference.Create(this);\n            await JS.InvokeVoidAsync(\"resizeWatcher.start\", objRef);\n        }\n    }\n\n    [JSInvokable]\n    public void OnResize(int newWidth) => width = newWidth;\n\n    public void Dispose() => objRef?.Dispose();\n}\n```\n\nThe JS calls `dotNetHelper.invokeMethodAsync(\"OnResize\", window.innerWidth)` on every resize. You resize the window to 800 px wide. Nothing else happens on the page.\n\n**What does the page show?**",
+      "options": [
+        "Width: 800",
+        "Width: 0",
+        "An error: `OnResize` must be `static`",
+        "An error: `OnResize` must return a `Task`"
+      ],
+      "correct": 1,
+      "explanation": "**Width: 0.** `OnResize` runs and sets `width` to 800, but a call from JS is not a Blazor event, so Blazor doesn't re-render by itself. Add `StateHasChanged()` in `OnResize`. Instance methods don't need to be static (that's only for `DotNet.invokeMethodAsync`), and a `void` method is fine."
+    },
+    {
+      "id": "C",
+      "title": "The wrong first argument",
+      "body": "In the project **MyShop** (assembly `MyShop`):\n\n```csharp\npublic static class Prices\n{\n    [JSInvokable]\n    public static decimal GetTax(decimal amount) => amount * 0.2m;\n}\n```\n\nThe JavaScript:\n\n```js\nconst tax = await DotNet.invokeMethodAsync(\"Prices\", \"GetTax\", 100);\n```\n\n**What happens?**",
+      "options": [
+        "`tax` is `20`",
+        "`tax` is `undefined`",
+        "The call fails, because the first argument must be the **assembly** name (`MyShop`)",
+        "The call fails, because `GetTax` is static"
+      ],
+      "correct": 2,
+      "explanation": "`DotNet.invokeMethodAsync` takes the **assembly name** first, then the method name. `\"Prices\"` is the class, so .NET finds no loaded assembly with that name and the promise rejects. Write `DotNet.invokeMethodAsync(\"MyShop\", \"GetTax\", 100)`. Static methods are exactly what this API calls."
+    },
+    {
+      "id": "D",
+      "title": "Module or window?",
+      "body": "wwwroot/js/math.js:\n\n```js\nexport function add(a, b) { return a + b; }\n```\n\nThe component:\n\n```csharp\nprotected override async Task OnAfterRenderAsync(bool firstRender)\n{\n    if (firstRender)\n    {\n        module = await JS.InvokeAsync<IJSObjectReference>(\"import\", \"./js/math.js\");\n        sum = await JS.InvokeAsync<int>(\"add\", 2, 3);\n        StateHasChanged();\n    }\n}\n```\n\n**What is the result?**",
+      "options": [
+        "`sum` is `5`",
+        "`sum` is `0`",
+        "A `JSException`: `add` can't be found",
+        "A build error: `add` is not a C# method"
+      ],
+      "correct": 2,
+      "explanation": "`JS.InvokeAsync(\"add\", ...)` looks for **`window.add`**, and a module's exports are not on `window`. Call it on the module reference instead: `await module.InvokeAsync<int>(\"add\", 2, 3)`. On an `IJSObjectReference`, the identifier is the export name."
+    }
+  ],
+  "practice": [
+    {
+      "id": "e1",
+      "title": "Save the theme",
+      "task": "When the user clicks **Save**, store the value of `theme` in the browser's local storage under the key **`\"theme\"**.\n\n1. Inject **`IJSRuntime`** as **`JS`**.\n2. In `Save`, call `localStorage.setItem` with **`InvokeVoidAsync`** and `await` it.",
+      "starter": "@* ThemePicker.razor *@\n\n<select @bind=\"theme\">\n    <option>light</option>\n    <option>dark</option>\n</select>\n<button @onclick=\"Save\">Save</button>\n\n@code {\n    private string theme = \"light\";\n\n    private async Task Save()\n    {\n\n    }\n}",
+      "solution": "@* ThemePicker.razor *@\n@inject IJSRuntime JS\n\n<select @bind=\"theme\">\n    <option>light</option>\n    <option>dark</option>\n</select>\n<button @onclick=\"Save\">Save</button>\n\n@code {\n    private string theme = \"light\";\n\n    private async Task Save()\n    {\n        await JS.InvokeVoidAsync(\"localStorage.setItem\", \"theme\", theme);\n    }\n}",
+      "hint": "The identifier is a path on `window`: `\"localStorage.setItem\"`. The arguments come after it.",
+      "checks": [
+        {
+          "id": "inject",
+          "label": "`@inject IJSRuntime JS`",
+          "pattern": "^\\s*@inject\\s+IJSRuntime\\s+JS\\s*$",
+          "hint": "Add `@inject IJSRuntime JS` at the top of the file."
+        },
+        {
+          "id": "call",
+          "label": "Calls `InvokeVoidAsync(\"localStorage.setItem\", \"theme\", theme)`",
+          "pattern": "await\\s+JS\\.InvokeVoidAsync\\s*\\(\\s*[\"']localStorage\\.setItem[\"']\\s*,\\s*[\"']theme[\"']\\s*,\\s*theme\\s*\\)",
+          "hint": "Inside `Save`, write `await JS.InvokeVoidAsync(\"localStorage.setItem\", \"theme\", theme);`."
+        },
+        {
+          "id": "no-window",
+          "label": "The identifier doesn't start with `window.`",
+          "pattern": "Invoke\\w*Async\\s*\\(\\s*[\"']window\\.",
+          "mustNotMatch": true,
+          "hint": "The identifier is already a path on `window`. Write `\"localStorage.setItem\"`."
+        }
+      ]
+    },
+    {
+      "id": "e2",
+      "title": "Fix the prerender crash",
+      "task": "This page reads the theme in `OnInitializedAsync`. With prerendering on, it throws *JavaScript interop calls cannot be issued at this time*. Fix it:\n\n1. Move the call to **`OnAfterRenderAsync(bool firstRender)`**.\n2. Run it only when **`firstRender`** is true.\n3. Call **`StateHasChanged()`** after you set `theme`, so the page shows it.\n4. Remove `OnInitializedAsync`.",
+      "starter": "@* Theme.razor *@\n@inject IJSRuntime JS\n\n<p>Theme: @theme</p>\n\n@code {\n    private string? theme;\n\n    protected override async Task OnInitializedAsync()\n    {\n        theme = await JS.InvokeAsync<string?>(\"localStorage.getItem\", \"theme\");\n    }\n}",
+      "solution": "@* Theme.razor *@\n@inject IJSRuntime JS\n\n<p>Theme: @theme</p>\n\n@code {\n    private string? theme;\n\n    protected override async Task OnAfterRenderAsync(bool firstRender)\n    {\n        if (firstRender)\n        {\n            theme = await JS.InvokeAsync<string?>(\"localStorage.getItem\", \"theme\");\n            StateHasChanged();\n        }\n    }\n}",
+      "hint": "`OnAfterRenderAsync` only runs in the browser, once the component is interactive. It runs after **every** render, so guard with `if (firstRender)`.",
+      "checks": [
+        {
+          "id": "after",
+          "label": "Overrides `OnAfterRenderAsync(bool firstRender)`",
+          "pattern": "protected\\s+override\\s+async\\s+Task\\s+OnAfterRenderAsync\\s*\\(\\s*bool\\s+firstRender\\s*\\)",
+          "hint": "Write `protected override async Task OnAfterRenderAsync(bool firstRender)`."
+        },
+        {
+          "id": "first",
+          "label": "Checks `if (firstRender)`",
+          "pattern": "if\\s*\\(\\s*firstRender\\s*\\)",
+          "hint": "Wrap the call in `if (firstRender) { ... }`."
+        },
+        {
+          "id": "call",
+          "label": "Still reads `localStorage.getItem` with `InvokeAsync<string?>`",
+          "pattern": "JS\\.InvokeAsync\\s*<\\s*string\\??\\s*>\\s*\\(\\s*[\"']localStorage\\.getItem[\"']",
+          "hint": "Keep `await JS.InvokeAsync<string?>(\"localStorage.getItem\", \"theme\")`."
+        },
+        {
+          "id": "shc",
+          "label": "Calls `StateHasChanged()` after setting `theme`",
+          "pattern": "theme\\s*=[\\s\\S]*?StateHasChanged\\s*\\(\\s*\\)\\s*;",
+          "hint": "After `theme = ...;`, add `StateHasChanged();`."
+        },
+        {
+          "id": "no-init",
+          "label": "`OnInitializedAsync` is gone",
+          "pattern": "OnInitialized(Async)?\\s*\\(",
+          "mustNotMatch": true,
+          "hint": "Remove `OnInitializedAsync`: JS can't be called there during prerendering."
+        }
+      ]
+    },
+    {
+      "id": "e3",
+      "title": "Load a collocated module",
+      "task": "`CopyButton.razor` lives in `Components/Shared/`. Next to it is **`CopyButton.razor.js`**:\n\n```js\nexport function copy(text) {\n    return navigator.clipboard.writeText(text);\n}\n```\n\nRight now the component calls a global function that no longer exists. Change it to use the module:\n\n1. Add a field **`private IJSObjectReference? module;`**.\n2. In `OnAfterRenderAsync`, on the first render, import **`\"./Components/Shared/CopyButton.razor.js\"`**.\n3. In `Copy`, call the export **`copy`** on the module.",
+      "starter": "@* Components/Shared/CopyButton.razor *@\n@inject IJSRuntime JS\n\n<button @onclick=\"Copy\">Copy</button>\n\n@code {\n    [Parameter] public string Text { get; set; } = \"\";\n\n    private async Task Copy()\n    {\n        await JS.InvokeVoidAsync(\"copyText\", Text);\n    }\n}",
+      "solution": "@* Components/Shared/CopyButton.razor *@\n@inject IJSRuntime JS\n\n<button @onclick=\"Copy\">Copy</button>\n\n@code {\n    [Parameter] public string Text { get; set; } = \"\";\n\n    private IJSObjectReference? module;\n\n    protected override async Task OnAfterRenderAsync(bool firstRender)\n    {\n        if (firstRender)\n        {\n            module = await JS.InvokeAsync<IJSObjectReference>(\"import\", \"./Components/Shared/CopyButton.razor.js\");\n        }\n    }\n\n    private async Task Copy()\n    {\n        if (module is not null)\n        {\n            await module.InvokeVoidAsync(\"copy\", Text);\n        }\n    }\n}",
+      "hint": "Import with `JS.InvokeAsync<IJSObjectReference>(\"import\", path)`. The path starts at the project root: `./Components/Shared/CopyButton.razor.js`.",
+      "checks": [
+        {
+          "id": "field",
+          "label": "A field `IJSObjectReference? module`",
+          "pattern": "IJSObjectReference\\??\\s+module\\s*(=\\s*[^;]+)?;",
+          "hint": "Add `private IJSObjectReference? module;` inside `@code`."
+        },
+        {
+          "id": "import",
+          "label": "Imports `./Components/Shared/CopyButton.razor.js`",
+          "pattern": "module\\s*=\\s*await\\s+JS\\.InvokeAsync\\s*<\\s*IJSObjectReference\\s*>\\s*\\(\\s*[\"']import[\"']\\s*,\\s*[\"']\\./Components/Shared/CopyButton\\.razor\\.js[\"']\\s*\\)",
+          "hint": "Write `module = await JS.InvokeAsync<IJSObjectReference>(\"import\", \"./Components/Shared/CopyButton.razor.js\");`."
+        },
+        {
+          "id": "first",
+          "label": "The import runs in `OnAfterRenderAsync` on the first render",
+          "pattern": "OnAfterRenderAsync\\s*\\(\\s*bool\\s+firstRender\\s*\\)[\\s\\S]*?if\\s*\\(\\s*firstRender\\s*\\)[\\s\\S]*?[\"']import[\"']",
+          "hint": "Put the import inside `OnAfterRenderAsync`, in `if (firstRender) { ... }`."
+        },
+        {
+          "id": "call",
+          "label": "Calls `copy` on the module",
+          "pattern": "module\\s*!?\\??\\.InvokeVoidAsync\\s*\\(\\s*[\"']copy[\"']\\s*,\\s*Text\\s*\\)",
+          "hint": "In `Copy`, write `await module.InvokeVoidAsync(\"copy\", Text);` (check for `null` first)."
+        },
+        {
+          "id": "no-global",
+          "label": "No more global `copyText` call",
+          "pattern": "copyText",
+          "mustNotMatch": true,
+          "hint": "Remove the old `JS.InvokeVoidAsync(\"copyText\", ...)` call."
+        }
+      ]
+    },
+    {
+      "id": "e4",
+      "title": "Dispose the module safely",
+      "task": "This component imports a module but never releases it. Fix it:\n\n1. Add **`@implements IAsyncDisposable`**.\n2. Add **`public async ValueTask DisposeAsync()`**.\n3. If `module` is not `null`, dispose it with **`await module.DisposeAsync()`**.\n4. Wrap that call in `try`/`catch` for **`JSDisconnectedException`** (the circuit can already be gone in Blazor Server).",
+      "starter": "@* Chart.razor *@\n@inject IJSRuntime JS\n\n<div id=\"chart\"></div>\n\n@code {\n    private IJSObjectReference? module;\n\n    protected override async Task OnAfterRenderAsync(bool firstRender)\n    {\n        if (firstRender)\n        {\n            module = await JS.InvokeAsync<IJSObjectReference>(\"import\", \"./js/chart.js\");\n            await module.InvokeVoidAsync(\"draw\", \"chart\");\n        }\n    }\n}",
+      "solution": "@* Chart.razor *@\n@implements IAsyncDisposable\n@inject IJSRuntime JS\n\n<div id=\"chart\"></div>\n\n@code {\n    private IJSObjectReference? module;\n\n    protected override async Task OnAfterRenderAsync(bool firstRender)\n    {\n        if (firstRender)\n        {\n            module = await JS.InvokeAsync<IJSObjectReference>(\"import\", \"./js/chart.js\");\n            await module.InvokeVoidAsync(\"draw\", \"chart\");\n        }\n    }\n\n    public async ValueTask DisposeAsync()\n    {\n        if (module is not null)\n        {\n            try\n            {\n                await module.DisposeAsync();\n            }\n            catch (JSDisconnectedException)\n            {\n            }\n        }\n    }\n}",
+      "hint": "`DisposeAsync` returns a `ValueTask`, not a `Task`. An empty `catch (JSDisconnectedException) { }` is fine here: there is nothing left to clean up.",
+      "checks": [
+        {
+          "id": "impl",
+          "label": "`@implements IAsyncDisposable`",
+          "pattern": "^\\s*@implements\\s+IAsyncDisposable\\s*$",
+          "hint": "Add `@implements IAsyncDisposable` at the top."
+        },
+        {
+          "id": "method",
+          "label": "`public async ValueTask DisposeAsync()`",
+          "pattern": "public\\s+async\\s+ValueTask\\s+DisposeAsync\\s*\\(\\s*\\)",
+          "hint": "Add `public async ValueTask DisposeAsync() { ... }`."
+        },
+        {
+          "id": "dispose",
+          "label": "Awaits `module.DisposeAsync()`",
+          "pattern": "await\\s+module\\s*!?\\??\\.DisposeAsync\\s*\\(\\s*\\)",
+          "hint": "Inside `DisposeAsync`, write `await module.DisposeAsync();`."
+        },
+        {
+          "id": "null",
+          "label": "Checks `module` for `null` first",
+          "pattern": "(module\\s+is\\s+not\\s+null|module\\s*!=\\s*null|module\\s*\\?\\.DisposeAsync|module\\s+is\\s+\\{\\s*\\})",
+          "hint": "Wrap it in `if (module is not null) { ... }`."
+        },
+        {
+          "id": "catch",
+          "label": "Catches `JSDisconnectedException`",
+          "pattern": "try\\s*\\{[\\s\\S]*?DisposeAsync[\\s\\S]*?\\}\\s*catch\\s*\\(\\s*JSDisconnectedException",
+          "hint": "Put the dispose call in `try { ... } catch (JSDisconnectedException) { }`."
+        }
+      ]
+    },
+    {
+      "id": "e5",
+      "title": "Focus the input",
+      "task": "When the page first shows, put the cursor in the search box.\n\n1. Capture the `<input>` with **`@ref=\"searchBox\"`**.\n2. Add a field **`private ElementReference searchBox;`**.\n3. In **`OnAfterRenderAsync`**, on the first render, call **`await searchBox.FocusAsync();`**.\n\nThe current code tries it in `OnInitialized`, where the reference is not set yet. Remove that.",
+      "starter": "@* Search.razor *@\n@page \"/search\"\n\n<input placeholder=\"Search\" />\n\n@code {\n    protected override void OnInitialized()\n    {\n        // TODO: focus the input\n    }\n}",
+      "solution": "@* Search.razor *@\n@page \"/search\"\n\n<input @ref=\"searchBox\" placeholder=\"Search\" />\n\n@code {\n    private ElementReference searchBox;\n\n    protected override async Task OnAfterRenderAsync(bool firstRender)\n    {\n        if (firstRender)\n        {\n            await searchBox.FocusAsync();\n        }\n    }\n}",
+      "hint": "`@ref` only fills the field after the element is rendered, so use it in `OnAfterRenderAsync`.",
+      "checks": [
+        {
+          "id": "ref",
+          "label": "The input has `@ref=\"searchBox\"`",
+          "pattern": "<input[^>]*@ref\\s*=\\s*\"@?searchBox\"",
+          "hint": "Add `@ref=\"searchBox\"` to the `<input>`."
+        },
+        {
+          "id": "field",
+          "label": "A field `ElementReference searchBox`",
+          "pattern": "ElementReference\\s+searchBox\\s*;",
+          "hint": "Add `private ElementReference searchBox;` inside `@code`."
+        },
+        {
+          "id": "focus",
+          "label": "Calls `searchBox.FocusAsync()` in `OnAfterRenderAsync` on the first render",
+          "pattern": "OnAfterRenderAsync\\s*\\(\\s*bool\\s+firstRender\\s*\\)[\\s\\S]*?if\\s*\\(\\s*firstRender\\s*\\)[\\s\\S]*?await\\s+searchBox\\.FocusAsync\\s*\\(\\s*\\)",
+          "hint": "In `OnAfterRenderAsync`, inside `if (firstRender)`, write `await searchBox.FocusAsync();`."
+        },
+        {
+          "id": "no-init",
+          "label": "`OnInitialized` is gone",
+          "pattern": "OnInitialized(Async)?\\s*\\(",
+          "mustNotMatch": true,
+          "hint": "Remove `OnInitialized`: the element doesn't exist there yet."
+        }
+      ]
+    },
+    {
+      "id": "e6",
+      "title": "Let JS call your component, from scratch",
+      "task": "Write the `@code` block of **`Clock.razor`**. A JS helper is already loaded:\n\n```js\nwindow.ticker = {\n    start: (dotNetHelper) => setInterval(\n        () => dotNetHelper.invokeMethodAsync(\"Tick\", new Date().toLocaleTimeString()), 1000)\n};\n```\n\n1. A field **`DotNetObjectReference<Clock>? objRef`** and a `string` field **`time`**.\n2. On the first render, create the reference with **`DotNetObjectReference.Create(this)`** and pass it to **`\"ticker.start\"`**.\n3. A public method **`Tick(string now)`** that JS can call: it sets `time` and refreshes the UI.\n4. Implement **`IDisposable`** and dispose the reference.",
+      "starter": "@* Clock.razor *@\n@inject IJSRuntime JS\n\n<p>Time: @time</p>\n\n@code {\n\n}",
+      "solution": "@* Clock.razor *@\n@implements IDisposable\n@inject IJSRuntime JS\n\n<p>Time: @time</p>\n\n@code {\n    private DotNetObjectReference<Clock>? objRef;\n    private string time = \"\";\n\n    protected override async Task OnAfterRenderAsync(bool firstRender)\n    {\n        if (firstRender)\n        {\n            objRef = DotNetObjectReference.Create(this);\n            await JS.InvokeVoidAsync(\"ticker.start\", objRef);\n        }\n    }\n\n    [JSInvokable]\n    public void Tick(string now)\n    {\n        time = now;\n        StateHasChanged();\n    }\n\n    public void Dispose() => objRef?.Dispose();\n}",
+      "hint": "A method called from JS needs `[JSInvokable]` and must be public. A call from JS doesn't re-render by itself, so call `StateHasChanged()`.",
+      "checks": [
+        {
+          "id": "field",
+          "label": "A field `DotNetObjectReference<Clock>? objRef`",
+          "pattern": "DotNetObjectReference\\s*<\\s*Clock\\s*>\\??\\s+objRef\\b",
+          "hint": "Add `private DotNetObjectReference<Clock>? objRef;`."
+        },
+        {
+          "id": "create",
+          "label": "Creates it with `DotNetObjectReference.Create(this)` on the first render",
+          "pattern": "if\\s*\\(\\s*firstRender\\s*\\)[\\s\\S]*?objRef\\s*=\\s*DotNetObjectReference\\.Create\\s*\\(\\s*this\\s*\\)",
+          "hint": "In `OnAfterRenderAsync`, inside `if (firstRender)`, write `objRef = DotNetObjectReference.Create(this);`."
+        },
+        {
+          "id": "start",
+          "label": "Passes it to `ticker.start`",
+          "pattern": "JS\\.InvokeVoidAsync\\s*\\(\\s*[\"']ticker\\.start[\"']\\s*,\\s*objRef\\s*\\)",
+          "hint": "Write `await JS.InvokeVoidAsync(\"ticker.start\", objRef);`."
+        },
+        {
+          "id": "tick",
+          "label": "`[JSInvokable] public void Tick(string now)`",
+          "pattern": "\\[JSInvokable[^\\]]*\\]\\s*public\\s+(async\\s+)?(void|Task)\\s+Tick\\s*\\(\\s*string\\s+\\w+\\s*\\)",
+          "hint": "Add `[JSInvokable] public void Tick(string now) { ... }`."
+        },
+        {
+          "id": "shc",
+          "label": "`Tick` sets `time` and calls `StateHasChanged()`",
+          "pattern": "Tick\\s*\\([^)]*\\)[\\s\\S]*?time\\s*=\\s*\\w+\\s*;[\\s\\S]*?StateHasChanged\\s*\\(\\s*\\)",
+          "hint": "Inside `Tick`, write `time = now;` then `StateHasChanged();`."
+        },
+        {
+          "id": "dispose",
+          "label": "Implements `IDisposable` and disposes `objRef`",
+          "pattern": "@implements\\s+IDisposable[\\s\\S]*objRef\\s*\\??\\.Dispose\\s*\\(\\s*\\)",
+          "hint": "Add `@implements IDisposable` and `public void Dispose() => objRef?.Dispose();`."
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "q1",
+      "body": "You need the value stored in local storage under `\"cart\"`. Which call is correct?",
+      "options": [
+        "`await JS.InvokeVoidAsync(\"localStorage.getItem\", \"cart\")`",
+        "`JS.Invoke(\"localStorage.getItem\", \"cart\")`",
+        "`await JS.InvokeAsync<string?>(\"localStorage.getItem\", \"cart\")`",
+        "`await JS.InvokeAsync<string?>(\"window.localStorage\", \"getItem\", \"cart\")`"
+      ],
+      "correct": 2,
+      "explanation": "Use **`InvokeAsync<T>`** when you need the result. `InvokeVoidAsync` throws the result away. `IJSRuntime` has no `Invoke` (that's `IJSInProcessRuntime`, WebAssembly only). The identifier is the full path to the function: `\"localStorage.getItem\"`."
+    },
+    {
+      "id": "q2",
+      "body": "What does the identifier `\"myApp.charts.draw\"` in `JS.InvokeVoidAsync(\"myApp.charts.draw\", data)` refer to?",
+      "options": [
+        "`window.myApp.charts.draw`",
+        "An export called `draw` in the file `wwwroot/myApp/charts.js`",
+        "A C# method `draw` in the namespace `myApp.charts`",
+        "Nothing: the identifier can't contain dots"
+      ],
+      "correct": 0,
+      "explanation": "On `IJSRuntime`, the identifier is a **path starting at `window`**. Blazor walks `window.myApp.charts` and calls `draw`. To call a function in a file, import it as a module and call the export on the `IJSObjectReference`."
+    },
+    {
+      "id": "q3",
+      "body": "A prerendered interactive page must read a value from JS when it first loads. Where should the call go?",
+      "options": [
+        "In the constructor",
+        "In `OnInitializedAsync`",
+        "In `SetParametersAsync`",
+        "In `OnAfterRenderAsync`, inside `if (firstRender)`"
+      ],
+      "correct": 3,
+      "explanation": "During prerendering the component runs on the server, with no browser, so JS calls throw. **`OnAfterRenderAsync`** only runs once the component is interactive in the browser. `firstRender` makes it run once. Call `StateHasChanged()` if you update the UI."
+    },
+    {
+      "id": "q4",
+      "body": "What does `await JS.InvokeAsync<IJSObjectReference>(\"import\", \"./js/map.js\")` return?",
+      "options": [
+        "The text of the file `map.js`",
+        "A reference to the loaded **JS module**, whose exports you call with `InvokeAsync`/`InvokeVoidAsync`",
+        "A C# class generated from `map.js`",
+        "Nothing useful: `import` only adds a `<script>` tag to the page"
+      ],
+      "correct": 1,
+      "explanation": "`\"import\"` is a special identifier that loads an ES module. You get an **`IJSObjectReference`** to it, and `module.InvokeVoidAsync(\"exportName\", ...)` calls one of its exports. Dispose the reference when the component goes away."
+    },
+    {
+      "id": "q5",
+      "body": "In a Blazor Web App, `Components/Pages/Map.razor` has a collocated file `Map.razor.js`. Which import path is correct?",
+      "options": [
+        "`\"./Map.razor.js\"`",
+        "`\"./js/Map.razor.js\"`",
+        "`\"./Components/Pages/Map.razor.js\"`",
+        "`\"Map\"`"
+      ],
+      "correct": 2,
+      "explanation": "Collocated JS files are published under their **path from the project root**, so you import `\"./Components/Pages/Map.razor.js\"`. The other paths give a 404 in the browser."
+    },
+    {
+      "id": "q6",
+      "body": "In a Blazor Server app, `DisposeAsync` calls `await module.DisposeAsync()`. When the user closes the tab, what can happen, and what is the usual fix?",
+      "options": [
+        "A `JSDisconnectedException`, because the circuit is gone; catch it and ignore it",
+        "A `NullReferenceException`; never dispose modules",
+        "A memory leak on the client; call `GC.Collect()`",
+        "Nothing can go wrong: `DisposeAsync` never throws"
+      ],
+      "correct": 0,
+      "explanation": "When the connection to the browser is already closed, there is no JS side to talk to, so the call throws **`JSDisconnectedException`**. The JS objects are gone anyway, so `catch (JSDisconnectedException) { }` is the standard pattern."
+    },
+    {
+      "id": "q7",
+      "body": "A component has `<input @ref=\"box\" />` and `private ElementReference box;`. It calls `await box.FocusAsync()` in `OnInitializedAsync`. Why doesn't this work?",
+      "options": [
+        "`FocusAsync` only works on buttons",
+        "`@ref` needs a `[Parameter]` attribute on the field",
+        "`ElementReference` must be passed to JS; it has no methods",
+        "`box` is only set **after** the element is rendered, and `OnInitializedAsync` runs before the first render"
+      ],
+      "correct": 3,
+      "explanation": "Blazor fills an `@ref` field when it renders the element. `OnInitializedAsync` runs before that, so `box` is still empty. Use it in `OnAfterRenderAsync` (with `firstRender`) or in an event handler."
+    },
+    {
+      "id": "q8",
+      "body": "JS runs `DotNet.invokeMethodAsync(\"MyApp\", \"GetVersion\")`. What must `GetVersion` be?",
+      "options": [
+        "A private method on any component",
+        "A `public static` method marked `[JSInvokable]` in the `MyApp` assembly",
+        "A method on a class registered in DI",
+        "A method named in `window.dotNetMethods`"
+      ],
+      "correct": 1,
+      "explanation": "`DotNet.invokeMethodAsync` calls **static** methods: they must be `public static` and have `[JSInvokable]`. The first argument is the assembly name. To call a method on an object, use a `DotNetObjectReference` instead."
+    },
+    {
+      "id": "q9",
+      "body": "A component creates `DotNetObjectReference.Create(this)` and passes it to JS, but never disposes it. What is the risk?",
+      "options": [
+        "A build error",
+        "The JS call fails the first time",
+        "The component is kept alive in memory after it is removed (a leak), and JS can still call into it",
+        "The UI stops updating"
+      ],
+      "correct": 2,
+      "explanation": "The reference keeps the .NET object alive so JS can call it. Without `Dispose()`, the component is never released, and callbacks can still reach a component that is no longer on screen. Implement `IDisposable` and call `objRef?.Dispose()`."
+    },
+    {
+      "id": "q10",
+      "body": "Which statement about `IJSInProcessRuntime` is true?",
+      "options": [
+        "It allows synchronous calls like `Invoke<T>`, but only in **WebAssembly**",
+        "It is the faster replacement for `IJSRuntime` in Blazor Server",
+        "You must register it in `Program.cs` before using JS interop",
+        "It is only available during prerendering"
+      ],
+      "correct": 0,
+      "explanation": "In WebAssembly, .NET and JS run in the same browser tab, so you can cast `IJSRuntime` to `IJSInProcessRuntime` and call `Invoke<T>` synchronously. In Blazor Server each call is a network round trip, so only the async API exists and the cast fails."
+    }
+  ],
+  "quizPassPercent": 80,
+  "interview": [
+    {
+      "id": "i1",
+      "question": "What is JavaScript interop in Blazor, and when do you need it?",
+      "modelAnswer": "It's how C# and JavaScript call each other. You need it for browser APIs Blazor doesn't wrap, like local storage, the clipboard or geolocation, and for existing JS libraries such as charts or maps. C# calls JS through `IJSRuntime`; JS calls .NET through `DotNet.invokeMethodAsync` or a `DotNetObjectReference`."
+    },
+    {
+      "id": "i2",
+      "question": "What is the difference between `InvokeVoidAsync` and `InvokeAsync<T>`?",
+      "modelAnswer": "Both call a JS function by its identifier, a path on `window` like `\"localStorage.setItem\"`. `InvokeVoidAsync` ignores the return value. `InvokeAsync<T>` waits for the result and deserializes it from JSON into `T`. Both are async and return a `ValueTask`."
+    },
+    {
+      "id": "i3",
+      "question": "Why do JS interop calls fail during prerendering, and how do you fix it?",
+      "modelAnswer": "During prerendering the component runs on the server to produce HTML, and there is no browser connected yet, so Blazor throws an `InvalidOperationException`. Move the call to `OnAfterRenderAsync`, guarded by `if (firstRender)`, which only runs once the component is interactive in the browser. Call `StateHasChanged()` if the result changes the UI."
+    },
+    {
+      "id": "i4",
+      "question": "How do you use a JavaScript module from a component, and why prefer it over global functions?",
+      "modelAnswer": "Write the JS as an ES module with `export`, then load it with `JS.InvokeAsync<IJSObjectReference>(\"import\", \"./js/file.js\")`, or a collocated `Component.razor.js` with its path from the project root. Call exports on the returned reference. Modules keep the global `window` clean, load only when needed, and keep the JS next to the component that uses it."
+    },
+    {
+      "id": "i5",
+      "question": "Why do you dispose an `IJSObjectReference`, and why catch `JSDisconnectedException`?",
+      "modelAnswer": "The reference keeps the JS object alive on the JS side, so you dispose it in `DisposeAsync` (with `@implements IAsyncDisposable`) to avoid leaks. In Blazor Server the circuit may already be gone when the component is disposed, for example when the tab is closed. Then the call throws `JSDisconnectedException`, which is safe to catch and ignore."
+    },
+    {
+      "id": "i6",
+      "question": "How does JavaScript call a static .NET method?",
+      "modelAnswer": "Mark a `public static` method with `[JSInvokable]`. From JS, call `DotNet.invokeMethodAsync(\"AssemblyName\", \"MethodName\", ...args)`, which returns a Promise. The first argument is the assembly name, not the class name. You can give the method another JS name with `[JSInvokable(\"name\")]`."
+    },
+    {
+      "id": "i7",
+      "question": "How does JavaScript call a method on a specific component instance?",
+      "modelAnswer": "Create a `DotNetObjectReference.Create(this)` and pass it to JS. JS calls `ref.invokeMethodAsync(\"MethodName\", args)` on it. The method must be public and `[JSInvokable]`, and it should call `StateHasChanged()` if it changes the UI. Dispose the reference when the component is disposed, or it leaks."
+    },
+    {
+      "id": "i8",
+      "question": "What is `IJSInProcessRuntime`, and when can you use it?",
+      "modelAnswer": "It's a version of the JS runtime that allows synchronous calls, like `Invoke<T>`. It only works in Blazor WebAssembly, where .NET and JS run in the same browser process. In Blazor Server every call goes over the network, so you must use the async `IJSRuntime` API. Default to async so the code works in any render mode."
+    }
+  ]
+}
